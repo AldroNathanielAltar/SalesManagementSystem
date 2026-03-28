@@ -1,36 +1,76 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
+import { supabase } from '../lib/supabaseClient'
 
 const AuthContext = createContext(null)
-export const useAuth = () => useContext(AuthContext)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem('sms_user')
-      return stored ? JSON.parse(stored) : null
-    } catch { return null }
-  })
+  const [currentUser, setCurrentUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authError, setAuthError]     = useState('')
 
-  const login = (userData) => {
-    const u = { ...userData, loggedInAt: new Date().toISOString() }
-    localStorage.setItem('sms_user', JSON.stringify(u))
-    setUser(u)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        resolveUser(session)
+      } else {
+        setAuthLoading(false)
+      }
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session) await resolveUser(session)
+        if (event === 'SIGNED_OUT') {
+          setCurrentUser(null)
+          setAuthLoading(false)
+        }
+      }
+    )
+    return () => subscription.unsubscribe()
+  }, [])
+
+  async function resolveUser(session) {
+    setAuthLoading(true)
+    setAuthError('')
+
+    const { data: userRow, error } = await supabase
+      .from('user')
+      .select('userId, username, user_type, record_status')
+      .eq('userId', session.user.id)
+      .single()
+
+    if (error || !userRow) {
+      setAuthError('Unable to verify your account. Please try again.')
+      await supabase.auth.signOut()
+      setAuthLoading(false)
+      return
+    }
+
+    if (userRow.record_status !== 'ACTIVE') {
+      await supabase.auth.signOut()
+      setAuthError('Your account is pending activation by a Sales Manager.')
+      setAuthLoading(false)
+      return
+    }
+
+    setCurrentUser({ ...session.user, ...userRow })
+    setAuthLoading(false)
   }
 
-  const logout = () => {
-    localStorage.removeItem('sms_user')
-    setUser(null)
-  }
-
-  const register = (userData) => {
-    // In a real app this would call an API.
-    // For now we just log the user in immediately after registering.
-    login(userData)
+  async function signOut() {
+    setAuthLoading(true)
+    await supabase.auth.signOut()
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, register, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ currentUser, authLoading, authError, setAuthError, signOut }}>
       {children}
     </AuthContext.Provider>
   )
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>')
+  return ctx
 }
