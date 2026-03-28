@@ -1,48 +1,61 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Eye, EyeOff, TrendingUp, User, Mail, Lock, UserCircle } from 'lucide-react';
-import './Auth.css';
+import { useState } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
+import { Eye, EyeOff, TrendingUp, User, Mail, Lock, UserCircle } from 'lucide-react'
+import { registerWithEmail, loginWithGoogle } from '../services/authService'
+import './Auth.css'
 
-const EMPTY = { firstName: '', lastName: '', username: '', email: '', password: '', confirmPassword: '' };
+const EMPTY = { firstName: '', lastName: '', username: '', email: '', password: '', confirmPassword: '' }
 
 export default function RegisterPage() {
-  const nav = useNavigate();
-  const [form, setForm]       = useState(EMPTY);
-  const [showPw, setShowPw]   = useState(false);
-  const [errors, setErrors]   = useState({});
-  const [loading, setLoading] = useState(false);
+  const nav = useNavigate()
+  const [form, setForm]         = useState(EMPTY)
+  const [showPw, setShowPw]     = useState(false)
+  const [errors, setErrors]     = useState({})
+  const [serverError, setServerError] = useState('')
+  const [loading, setLoading]   = useState(false)
 
   function set(field, val) {
-    setForm(f => ({ ...f, [field]: val }));
-    setErrors(e => ({ ...e, [field]: '' }));
+    setForm(f => ({ ...f, [field]: val }))
+    setErrors(e => ({ ...e, [field]: '' }))
   }
 
   function validate() {
-    const errs = {};
-    if (!form.firstName.trim())   errs.firstName = 'First name is required.';
-    if (!form.lastName.trim())    errs.lastName  = 'Last name is required.';
-    if (!form.username.trim())    errs.username  = 'Username is required.';
-    if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Valid email required.';
-    if (form.password.length < 8) errs.password  = 'Password must be at least 8 characters.';
-    if (form.password !== form.confirmPassword) errs.confirmPassword = 'Passwords do not match.';
-    return errs;
+    const errs = {}
+    if (!form.firstName.trim())  errs.firstName = 'First name is required.'
+    if (!form.lastName.trim())   errs.lastName  = 'Last name is required.'
+    if (!form.username.trim())   errs.username  = 'Username is required.'
+    if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Valid email required.'
+    if (form.password.length < 8) errs.password = 'Password must be at least 8 characters.'
+    if (form.password !== form.confirmPassword) errs.confirmPassword = 'Passwords do not match.'
+    return errs
   }
 
   async function handleRegister(e) {
-    e.preventDefault();
-    const errs = validate();
-    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
-    setLoading(true);
-    // TODO: wire to supabase.auth.signUp({ email: form.email, password: form.password, options: { data: { firstName, lastName, username } } })
-    setTimeout(() => {
-      setLoading(false);
-      nav('/login');
-    }, 1000);
+    e.preventDefault()
+    setServerError('')
+    const errs = validate()
+    if (Object.keys(errs).length > 0) { setErrors(errs); return }
+    setLoading(true)
+    try {
+      await registerWithEmail(form.email, form.password, {
+        firstName: form.firstName,
+        lastName:  form.lastName,
+        username:  form.username,
+      })
+      nav('/login?registered=true')
+    } catch (err) {
+      setServerError(err.message || 'Registration failed. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  function handleGoogle() {
-    // TODO: wire to supabase.auth.signInWithOAuth({ provider: 'google' })
-    alert('Google Register — wire to Supabase');
+  async function handleGoogle() {
+    try {
+      await loginWithGoogle()
+    } catch (err) {
+      setServerError(err.message || 'Google sign in failed. Please try again.')
+    }
   }
 
   const Field = ({ name, label, type = 'text', icon: Icon, placeholder }) => (
@@ -61,7 +74,7 @@ export default function RegisterPage() {
       </div>
       {errors[name] && <p className="field-error">{errors[name]}</p>}
     </div>
-  );
+  )
 
   return (
     <div className="auth-page">
@@ -76,6 +89,13 @@ export default function RegisterPage() {
         </div>
 
         <h2 className="auth-title">Create your account</h2>
+
+        {/* Server error */}
+        {serverError && (
+          <div className="field-error" style={{ marginBottom: '1rem', textAlign: 'center' }}>
+            {serverError}
+          </div>
+        )}
 
         <form className="auth-form" onSubmit={handleRegister} noValidate>
           <div className="auth-row-2">
@@ -140,5 +160,5 @@ export default function RegisterPage() {
         </p>
       </div>
     </div>
-  );
+  )
 }
