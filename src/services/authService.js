@@ -1,19 +1,29 @@
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabaseClient'
 
 // ===== EMAIL AUTH =====
-export async function registerWithEmail(email, password) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
-  if (error) throw error;
-  return data;
+export async function registerWithEmail(email, password, metadata = {}) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        firstName: metadata.firstName ?? '',
+        lastName:  metadata.lastName  ?? '',
+        username:  metadata.username  ?? '',
+      }
+    }
+  })
+  if (error) throw error
+  return data
 }
 
 export async function loginWithEmail(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
-  });
-  if (error) throw error;
-  return data;
+  })
+  if (error) throw error
+  return data
 }
 
 // ===== GOOGLE AUTH =====
@@ -23,12 +33,12 @@ export async function loginWithGoogle() {
     options: {
       redirectTo: `${window.location.origin}/auth/callback`,
     },
-  });
-  if (error) throw error;
+  })
+  if (error) throw error
 }
 
 // ===== LOGOUT =====
 export async function logout() {
-  const { error } = await supabase.auth.signOut();
-  if (error) throw error;
+  const { error } = await supabase.auth.signOut()
+  if (error) throw error
 }
