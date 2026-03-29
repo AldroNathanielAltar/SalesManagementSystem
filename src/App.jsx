@@ -1,12 +1,17 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
-import AppShell from "./layouts/AppShell.jsx";
 
+// PR-01
 import LoginPage from "./pages/LoginPage.jsx";
+// PR-02
 import RegisterPage from "./pages/RegisterPage.jsx";
-import AuthCallbackPage from "./pages/AuthCallbackPage.jsx";
+// PR-03
+import AppShell from "./layouts/AppShell.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
+// PR-04
+import AuthCallbackPage from "./pages/AuthCallbackPage.jsx";
+// Placeholder pages for every sidebar link
 import {
   TransactionsPage,
   CustomersPage,
@@ -23,12 +28,12 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public routes */}
+          {/* ── Public ── */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
-          {/* Protected routes wrapped in AppShell */}
+          {/* ── Protected (AppShell wraps all inner pages) ── */}
           <Route
             path="/"
             element={
