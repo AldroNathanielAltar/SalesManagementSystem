@@ -1,0 +1,57 @@
+.sl-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.sl-sum-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+}
+.sl-sum-card.ok   { border-left: 3px solid var(--green); }
+.sl-sum-card.warn { border-left: 3px solid var(--red); }
+.sl-sum-card.rev  { border-left: 3px solid var(--accent); }
+.slsv { font-size: 22px; font-weight: 700; color: var(--text-primary); }
+.slsl { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+
+.date-filter-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.date-input {
+  width: 140px !important;
+  padding: 7px 10px !important;
+  font-size: 12.5px !important;
+}
+
+/* Clickable trans no */
+.trans-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--accent);
+  font-weight: 600;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--transition);
+}
+.trans-link:hover { color: var(--accent-light); }
+.trans-link svg { opacity: 0; transition: opacity var(--transition); }
+.trans-link:hover svg { opacity: 1; }
+
+/* Inactive rows */
+.row-inactive td { opacity: 0.55; }
+.row-inactive:hover td { opacity: 0.8; }
+
+@media (max-width: 700px) {
+  .date-filter-wrap { flex-wrap: wrap; }
+  .date-input { width: 120px !important; }
+}
