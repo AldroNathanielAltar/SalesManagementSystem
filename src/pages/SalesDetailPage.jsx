@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Pencil, Trash2, RotateCcw, Loader2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { useRights } from '../context/RightsContext';
+import { useRights } from '../context/UserRightsContext';
 import AddLineItemModal  from './modals/AddLineItemModal';
 import EditLineItemModal from './modals/EditLineItemModal';
 import ConfirmModal      from '../components/ui/ConfirmModal';
