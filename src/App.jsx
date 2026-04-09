@@ -1,7 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "./context/AuthContext.jsx";
-import ProtectedRoute from "./components/ProtectedRoute.jsx";
-import { AppProvider } from './context/AppContext.jsx'
 import { AuthProvider } from "./context/AuthContext";
 import { AppProvider } from "./context/AppContext";
 import { RightsProvider } from "./context/RightsContext";
@@ -65,8 +62,16 @@ export default function App() {
                 <Route path="products" element={<ProductsPage />} />
                 <Route path="prices" element={<PricesPage />} />
                 <Route path="reports" element={<ReportsPage />} />
-                <Route path="admin" element={<AdminPage />} />
-                <Route path="deleted-items" element={<DeletedItemsPage />} />
+                <Route path="admin" element={
+                  <ProtectedRoute allowedRoles={['ADMIN','SUPERADMIN']}>
+                    <AdminPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="deleted-items" element={
+                  <ProtectedRoute allowedRoles={['ADMIN','SUPERADMIN']}>
+                    <DeletedItemsPage />
+                  </ProtectedRoute>
+                } />
               </Route>
 
               <Route path="*" element={<Navigate to="/login" replace />} />
