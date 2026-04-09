@@ -1,7 +1,9 @@
+// src/App.jsx
+
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { AppProvider } from "./context/AppContext";
-import { RightsProvider } from "./context/RightsContext";
+import { UserRightsProvider } from "./context/UserRightsContext";
 import Layout from "./components/layout/Layout";
 import ProtectedRoute from "./components/ui/ProtectedRoute";
 
@@ -36,48 +38,11 @@ export default function App() {
         <UserRightsProvider>
           <BrowserRouter>
             <Routes>
-              {/* ── Public ── */}
-        <RightsProvider>
-          <BrowserRouter>
-            <Routes>
               {/* Public */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
-              {/* ── Protected (AppShell wraps all inner pages) ── */}
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <AppShell />
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={<Navigate to="/dashboard" replace />} />
-                <Route path="dashboard" element={<DashboardPage />} />
-                <Route path="transactions" element={<TransactionsPage />} />
-                <Route path="customers" element={<CustomersPage />} />
-                <Route path="employees" element={<EmployeesPage />} />
-                <Route path="products" element={<ProductsPage />} />
-                <Route path="prices" element={<PricesPage />} />
-                <Route path="reports" element={<ReportsPage />} />
-                <Route path="admin" element={
-                  <ProtectedRoute allowedRoles={['ADMIN','SUPERADMIN']}>
-                    <AdminPage />
-                  </ProtectedRoute>
-                } />
-                <Route path="deleted-items" element={
-                  <ProtectedRoute allowedRoles={['ADMIN','SUPERADMIN']}>
-                    <DeletedItemsPage />
-                  </ProtectedRoute>
-                } />
-              </Route>
-
-              <Route path="*" element={<Navigate to="/login" replace />} />
-            </Routes>
-          </BrowserRouter>
-        </UserRightsProvider>
               {/* Protected */}
               <Route
                 path="/*"
@@ -85,51 +50,27 @@ export default function App() {
                   <ProtectedRoute>
                     <Layout>
                       <Routes>
-                        <Route
-                          index
-                          element={<Navigate to="/sales" replace />}
-                        />
+                        <Route index element={<Navigate to="/sales" replace />} />
 
                         {/* PR-01 + PR-02 + PR-03 — Sales */}
                         <Route path="sales" element={<SalesListPage />} />
-                        <Route
-                          path="sales/:transNo"
-                          element={<SalesDetailPage />}
-                        />
+                        <Route path="sales/:transNo" element={<SalesDetailPage />} />
 
                         {/* PR-04 — Read-only Lookups */}
-                        <Route
-                          path="lookups/customers"
-                          element={<CustomerLookupPage />}
-                        />
-                        <Route
-                          path="lookups/employees"
-                          element={<EmployeeLookupPage />}
-                        />
-                        <Route
-                          path="lookups/products"
-                          element={<ProductLookupPage />}
-                        />
-                        <Route
-                          path="lookups/prices"
-                          element={<PriceHistoryPage />}
-                        />
+                        <Route path="lookups/customers" element={<CustomerLookupPage />} />
+                        <Route path="lookups/employees" element={<EmployeeLookupPage />} />
+                        <Route path="lookups/products" element={<ProductLookupPage />} />
+                        <Route path="lookups/prices" element={<PriceHistoryPage />} />
 
                         {/* PR-05 — Deleted Items */}
-                        <Route
-                          path="deleted-items"
-                          element={<DeletedItemsPage />}
-                        />
+                        <Route path="deleted-items" element={<DeletedItemsPage />} />
 
                         {/* Reports & Admin */}
                         <Route path="reports" element={<Reports />} />
                         <Route path="admin" element={<AdminPage />} />
                         <Route path="users" element={<Users />} />
 
-                        <Route
-                          path="*"
-                          element={<Navigate to="/sales" replace />}
-                        />
+                        <Route path="*" element={<Navigate to="/sales" replace />} />
                       </Routes>
                     </Layout>
                   </ProtectedRoute>
@@ -137,7 +78,7 @@ export default function App() {
               />
             </Routes>
           </BrowserRouter>
-        </RightsProvider>
+        </UserRightsProvider>
       </AppProvider>
     </AuthProvider>
   );
