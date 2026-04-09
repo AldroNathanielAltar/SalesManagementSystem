@@ -1,27 +1,35 @@
-import { Navigate } from "react-router-dom";
+// src/components/ui/ProtectedRoute.jsx
+// PR-03: feat/rights-stamp-sidebar
+// M4 – Rights & Auth Specialist | Sprint 2
+//
+// Changes:
+// - Added /deleted-items route guard — USER accounts redirected to /sales
+// - Uses record_status (not status) for login guard — matches AuthContext
+
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
-/**
- * Wraps a route so only authenticated users can access it.
- * If not authenticated, redirects to /login.
- * If authenticated but INACTIVE (blocked), redirects to /login?error=not_activated.
- *
- * TODO: replace `isAuthenticated` stub with real Supabase session check:
- *   const { data: { session } } = await supabase.auth.getSession()
- */
 export default function ProtectedRoute({ children }) {
-  const { currentUser } = useAuth();
+  const { currentUser, authLoading } = useAuth();
+  const location = useLocation();
 
-  // Stub: treat having a currentUser as authenticated (replace with Supabase session)
-  const isAuthenticated = !!currentUser;
+  // Wait for auth to resolve before making any redirect decisions
+  if (authLoading) return null;
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+  // Not logged in — redirect to login
+  if (!currentUser) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Login guard: block INACTIVE users
-  if (currentUser?.status === "INACTIVE") {
+  // Login guard — block INACTIVE users
+  if (currentUser?.record_status === "INACTIVE") {
     return <Navigate to="/login?error=not_activated" replace />;
+  }
+
+  // Route guard — /deleted-items blocked for USER accounts
+  const isUser = currentUser?.user_type === "USER";
+  if (isUser && location.pathname === "/deleted-items") {
+    return <Navigate to="/sales" replace />;
   }
 
   return children;
