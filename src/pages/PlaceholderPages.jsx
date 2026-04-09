@@ -1,41 +1,73 @@
-// ── Reusable placeholder ─────────────────────────────────
-function PlaceholderPage({ title, icon, description }) {
+import { ShieldCheck, Construction } from "lucide-react";
+
+function PlaceholderPage({ icon: Icon, title, description }) {
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-        <p className="text-gray-500 text-sm mt-1">{description}</p>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "60vh",
+        gap: 16,
+        textAlign: "center",
+      }}
+    >
+      <div
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: 16,
+          background: "var(--accent-dim)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "var(--accent)",
+        }}
+      >
+        <Icon size={28} />
       </div>
-      <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
-        <div className="text-5xl mb-4">{icon}</div>
-        <h3 className="text-lg font-semibold text-gray-700 mb-1">{title}</h3>
-        <p className="text-gray-400 text-sm">This page will be built in the next sprint.</p>
+      <h2
+        style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}
+      >
+        {title}
+      </h2>
+      <p
+        style={{
+          fontSize: 14,
+          color: "var(--text-muted)",
+          maxWidth: 360,
+          lineHeight: 1.6,
+        }}
+      >
+        {description}
+      </p>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "8px 16px",
+          background: "var(--amber-dim)",
+          borderRadius: 8,
+          border: "1px solid rgba(217,119,6,.2)",
+        }}
+      >
+        <Construction size={14} style={{ color: "var(--amber)" }} />
+        <span style={{ fontSize: 12, color: "var(--amber)", fontWeight: 600 }}>
+          Coming in Sprint 3
+        </span>
       </div>
     </div>
-  )
+  );
 }
 
-export function TransactionsPage() {
-  return <PlaceholderPage title="Transactions"  icon="🧾" description="View and manage all sales transactions."/>
-}
-export function CustomersPage() {
-  return <PlaceholderPage title="Customers"     icon="👥" description="Manage your customer records."/>
-}
-export function EmployeesPage() {
-  return <PlaceholderPage title="Employees"     icon="🏢" description="Manage employee accounts and roles."/>
-}
-export function ProductsPage() {
-  return <PlaceholderPage title="Products"      icon="📦" description="Manage your product catalogue."/>
-}
-export function PricesPage() {
-  return <PlaceholderPage title="Prices"        icon="💲" description="Set and manage product pricing."/>
-}
-export function ReportsPage() {
-  return <PlaceholderPage title="Reports"       icon="📊" description="View sales and performance reports."/>
-}
 export function AdminPage() {
-  return <PlaceholderPage title="Admin"         icon="⚙️" description="System administration and configuration."/>
-}
-export function DeletedItemsPage() {
-  return <PlaceholderPage title="Deleted Items" icon="🗑️" description="Review and restore recently deleted records."/>
+  return (
+    <PlaceholderPage
+      icon={ShieldCheck}
+      title="Admin Panel"
+      description="User management: activate/deactivate users. SUPERADMIN rows are fully protected. Wired to Supabase in Sprint 3."
+    />
+  );
 }

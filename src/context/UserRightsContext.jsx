@@ -2,8 +2,8 @@
 // PR-01: feat/rights-context
 // M4 – Rights & Auth Specialist | Sprint 2
 //
-// Loads all 13 UserModule_Rights for the logged-in user on login.
-// Exposes a rights map and the useRights() hook to all components.
+// Loads all 13 rights from usermodule_rights for the logged-in user on login.
+// Exposes a rights map, can() helper, and the useRights() hook to all components.
 //
 // Table: usermodule_rights
 // Columns: userid (text), rightid (varchar), right_value (int4)
@@ -33,18 +33,18 @@ const DEFAULT_RIGHTS = {
 
 const UserRightsContext = createContext(null)
 
+// ─────────────────────────────────────────────────────────────────────────────
+// UserRightsProvider
+// On login, loads all 13 rights from usermodule_rights for the current user.
+// Stores them as a flat map: { SALES_VIEW: 1, SALES_ADD: 0, ... }
+// ─────────────────────────────────────────────────────────────────────────────
 export function UserRightsProvider({ children }) {
   const { currentUser } = useAuth()
 
-  // rights — shape: { SALES_VIEW: 1, SALES_ADD: 0, ... }
   const [rights, setRights]               = useState(DEFAULT_RIGHTS)
   const [rightsLoading, setRightsLoading] = useState(false)
   const [rightsError, setRightsError]     = useState('')
 
-  // -------------------------------------------------------------------------
-  // Fetch rights whenever currentUser changes.
-  // Clear rights when the user logs out (currentUser === null).
-  // -------------------------------------------------------------------------
   useEffect(() => {
     if (!currentUser?.userId) {
       // Logged out — reset to all-zero defaults
@@ -77,9 +77,9 @@ export function UserRightsProvider({ children }) {
     const rightsMap = { ...DEFAULT_RIGHTS }
 
     data.forEach(({ rightid, right_value }) => {
-      const key = rightid?.toUpperCase()          // normalize casing just in case
+      const key = rightid?.toUpperCase()    // normalize casing just in case
       if (key in rightsMap) {
-        rightsMap[key] = right_value ?? 0         // treat NULL as 0
+        rightsMap[key] = right_value ?? 0   // treat NULL as 0
       }
     })
 
@@ -87,20 +87,26 @@ export function UserRightsProvider({ children }) {
     setRightsLoading(false)
   }
 
+  // ---------------------------------------------------------------------------
+  // can(right) — helper used by components to check a single right
+  // Usage: can('SALES_ADD') returns true if right_value === 1
+  // ---------------------------------------------------------------------------
+  function can(right) {
+    return rights[right] === 1
+  }
+
   return (
-    <UserRightsContext.Provider value={{ rights, rightsLoading, rightsError }}>
+    <UserRightsContext.Provider value={{ rights, can, rightsLoading, rightsError }}>
       {children}
     </UserRightsContext.Provider>
   )
 }
 
-// ---------------------------------------------------------------------------
-// useRights() — the hook every component will call
-//
-// Usage:
-//   const { rights, rightsLoading } = useRights()
-//   if (rights.SALES_ADD === 1) { ... }
-// ---------------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
+// useRights hook
+// Usage: const { rights, can, rightsLoading } = useRights()
+// Check a right: can('SALES_ADD') or rights.SALES_ADD === 1
+// ─────────────────────────────────────────────────────────────────────────────
 export function useRights() {
   const ctx = useContext(UserRightsContext)
   if (!ctx) throw new Error('useRights must be used inside <UserRightsProvider>')
