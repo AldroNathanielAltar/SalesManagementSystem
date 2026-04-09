@@ -1,0 +1,104 @@
+/* ============================================================
+   fix/ui-responsive-forms — PR-06
+   Mobile responsive fixes for modals, detail page, and
+   all lookup/sales pages across 375px–1280px breakpoints.
+   ============================================================ */
+
+/* ── Modal responsive ── */
+@media (max-width: 600px) {
+  .modal {
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
+  }
+  .modal-overlay {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .modal-body  { padding: 18px 16px !important; gap: 13px !important; }
+  .modal-header { padding: 16px 16px 12px !important; }
+  .modal-footer { padding: 12px 16px 20px !important; }
+}
+
+/* ── Grid 2-col → 1-col on mobile ── */
+@media (max-width: 600px) {
+  .form-row-2,
+  [style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── Page header stacking ── */
+@media (max-width: 640px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+  .page-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .page-actions .btn { flex: 1; justify-content: center; }
+}
+
+/* ── SalesListPage date filter ── */
+@media (max-width: 640px) {
+  .date-filter-wrap { flex-wrap: wrap; width: 100%; }
+  .date-input { width: 100% !important; flex: 1; }
+}
+
+/* ── Table horizontal scroll on small screens ── */
+@media (max-width: 768px) {
+  .table-wrap { border-radius: var(--radius-md); }
+  table { font-size: 12.5px; }
+  thead th, tbody td { padding: 10px 12px; }
+}
+
+/* ── SalesDetailPage header grid ── */
+@media (max-width: 600px) {
+  .sd-header-grid { grid-template-columns: 1fr 1fr !important; }
+}
+@media (max-width: 380px) {
+  .sd-header-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ── Summary cards min sizing ── */
+@media (max-width: 480px) {
+  .sl-summary,
+  .ord-summary,
+  .prod-summary,
+  .rep-kpi-grid,
+  .usr-summary {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* ── Tabs on mobile ── */
+@media (max-width: 480px) {
+  .di-tabs { flex-direction: column; border-bottom: none; }
+  .di-tab { border-radius: var(--radius-md) !important; border: 1px solid var(--border) !important; margin-bottom: 0 !important; }
+  .di-tab.active { border-color: var(--accent) !important; }
+}
+
+/* ── Search input full width ── */
+@media (max-width: 480px) {
+  .search-input { width: 100% !important; }
+  .search-wrap  { width: 100%; }
+}
+
+/* ── Auth pages ── */
+@media (max-width: 480px) {
+  .auth-card, .auth-card-wide {
+    padding: 24px 16px !important;
+    border-radius: var(--radius-lg) !important;
+  }
+  .auth-row-2 { grid-template-columns: 1fr !important; }
+}
+
+/* ── Sidebar on tablet ── */
+@media (max-width: 1024px) and (min-width: 769px) {
+  :root { --sidebar-w: 200px; }
+  .sb-logo-text { font-size: 15px; }
+  .sb-item { font-size: 13px; padding: 8px 10px; }
+}
