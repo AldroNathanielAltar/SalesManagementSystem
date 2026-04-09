@@ -1,5 +1,4 @@
 // src/App.jsx
-// Conflict resolved — keeps M2 routes, replaces RightsProvider with UserRightsProvider (M4)
 
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
