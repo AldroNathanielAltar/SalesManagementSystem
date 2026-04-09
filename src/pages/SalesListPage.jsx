@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { useRights } from '../context/RightsContext';
+import { useRights } from '../context/UserRightsContext';
 import AddSaleModal from './modals/AddSaleModal';
 import EditSaleModal from './modals/EditSaleModal';
 import SoftDeleteSaleDialog from './modals/SoftDeleteSaleDialog';
