@@ -1,0 +1,12 @@
+.lookup-readonly-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--accent-dim);
+  border: 1px solid rgba(37,99,235,.15);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--accent);
+  margin-bottom: 18px;
+}
