@@ -1,3 +1,12 @@
+// src/components/layout/Sidebar.jsx
+// PR-03: feat/rights-stamp-sidebar
+// M4 – Rights & Auth Specialist | Sprint 2
+//
+// Changes:
+// - Removed broken isSuperAdmin/isAdmin from useAuth (not in AuthContext)
+// - Sidebar Admin + Deleted Items links hidden for USER via user_type check
+// - Logout wired to signOut() from AuthContext (no more TODO)
+
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   ShoppingCart,
@@ -24,10 +33,10 @@ const NAV_GROUPS = [
   {
     label: "Lookups",
     items: [
-      { to: "/lookups/customers", icon: Users, label: "Customers" },
-      { to: "/lookups/employees", icon: Users, label: "Employees" },
-      { to: "/lookups/products", icon: Package, label: "Products" },
-      { to: "/lookups/prices", icon: Tag, label: "Price History" },
+      { to: "/lookups/customers", icon: Users,   label: "Customers" },
+      { to: "/lookups/employees", icon: Users,   label: "Employees" },
+      { to: "/lookups/products",  icon: Package, label: "Products" },
+      { to: "/lookups/prices",    icon: Tag,     label: "Price History" },
     ],
   },
   {
@@ -35,22 +44,26 @@ const NAV_GROUPS = [
     items: [{ to: "/reports", icon: BarChart3, label: "Reports" }],
   },
   {
+    // adminOnly: true — hidden for USER accounts
     label: "Admin",
     adminOnly: true,
     items: [
-      { to: "/admin", icon: ShieldCheck, label: "Admin" },
-      { to: "/deleted-items", icon: Trash2, label: "Deleted Items" },
+      { to: "/admin",        icon: ShieldCheck, label: "Admin" },
+      { to: "/deleted-items", icon: Trash2,     label: "Deleted Items" },
     ],
   },
 ];
 
 export default function Sidebar({ open, onClose }) {
-  const { currentUser, isSuperAdmin, isAdmin } = useAuth();
-  const nav = useNavigate();
+  const { currentUser, signOut } = useAuth()
+  const nav = useNavigate()
 
-  function handleLogout() {
-    // TODO: supabase.auth.signOut()
-    nav("/login");
+  const isSuperAdmin = currentUser?.user_type === 'SUPERADMIN'
+  const isAdmin      = currentUser?.user_type === 'ADMIN' || isSuperAdmin
+
+  async function handleLogout() {
+    await signOut()
+    nav("/login")
   }
 
   return (
@@ -65,7 +78,7 @@ export default function Sidebar({ open, onClose }) {
         </div>
 
         <div className="sb-role-wrap">
-          <div className={`sb-role-pill ${isSuperAdmin ? "super" : "admin"}`}>
+          <div className={`sb-role-pill ${isSuperAdmin ? "super" : isAdmin ? "admin" : "user"}`}>
             {isSuperAdmin ? <Crown size={11} /> : <Shield size={11} />}
             {isSuperAdmin ? "Super Admin" : isAdmin ? "Admin" : "User"}
           </div>
@@ -73,7 +86,8 @@ export default function Sidebar({ open, onClose }) {
 
         <nav className="sb-nav">
           {NAV_GROUPS.map((group) => {
-            if (group.adminOnly && !isAdmin) return null;
+            // Hide Admin group entirely for USER accounts
+            if (group.adminOnly && !isAdmin) return null
             return (
               <div key={group.label} className="sb-group">
                 <p className="sb-group-label">{group.label}</p>
@@ -92,15 +106,17 @@ export default function Sidebar({ open, onClose }) {
                   </NavLink>
                 ))}
               </div>
-            );
+            )
           })}
         </nav>
 
         <div className="sb-footer">
           <div className="sb-user">
-            <div className="sb-avatar">{currentUser?.avatar}</div>
+            <div className="sb-avatar">
+              {currentUser?.username?.charAt(0)?.toUpperCase() ?? '?'}
+            </div>
             <div className="sb-user-info">
-              <p className="sb-uname">{currentUser?.name}</p>
+              <p className="sb-uname">{currentUser?.username}</p>
               <p className="sb-uemail">{currentUser?.email}</p>
             </div>
           </div>
