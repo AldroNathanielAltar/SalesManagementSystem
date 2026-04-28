@@ -19,7 +19,7 @@ import AuthCallbackPage from "./pages/AuthCallbackPage";
 import SalesListPage    from "./pages/SalesListPage";
 import SalesDetailPage  from "./pages/SalesDetailPage";
 import DeletedItemsPage from "./pages/DeletedItemsPage";
-import Reports          from "./pages/Reports";
+import Reports from "./pages/ReportsPage";
 import { AdminPage }    from "./pages/PlaceholderPages";
 
 // Sprint 3 pages
