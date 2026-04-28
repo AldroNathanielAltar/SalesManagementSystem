@@ -1,6 +1,10 @@
 /**
- * PR-01: feat/ui-admin-users
- * UserManagementPage — Sprint 3 M2
+ * PR-02: feat/rights-superadmin-guard
+ * UserManagementPage — Sprint 3 M4
+ *
+ * Changes from M2 version:
+ * - Fixed import: RightsContext → UserRightsContext
+ * - Added missing Toast import
  *
  * Sprint doc requirements:
  * - Table: userid, username, user_type, record_status
@@ -12,14 +16,14 @@
 import { useState, useEffect } from 'react';
 import {
   Search, Crown, Shield, User, CheckCircle,
-  XCircle, Lock, AlertTriangle, Loader2, RefreshCw,
+  XCircle, Lock, Loader2, RefreshCw,
 } from 'lucide-react';
 import { useAuth }   from '../context/AuthContext';
-import { useRights } from '../context/RightsContext';
+import { useRights } from '../context/UserRightsContext';  // ← fixed import
 import { supabase }  from '../lib/supabaseClient';
-import './UserManagementPage.css';
+import Toast         from '../components/ui/Toast';        // ← added missing import
 import ConfirmModal  from '../components/ui/ConfirmModal';
-
+import './UserManagementPage.css';
 
 /* ── Badge helpers ── */
 const TYPE_BADGE = {
@@ -34,22 +38,21 @@ const STATUS_BADGE = {
 
 export default function UserManagementPage() {
   const { currentUser } = useAuth();
-  // Derive role flags from user_type — matches your AuthContext shape
   const userType     = currentUser?.user_type || 'USER';
   const isSuperAdmin = userType === 'SUPERADMIN';
   const isAdmin      = userType === 'ADMIN' || isSuperAdmin;
   const { can } = useRights();
 
-  const [users,        setUsers]        = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [refreshing,   setRefreshing]   = useState(false);
-  const [search,       setSearch]       = useState('');
-  const [typeFilter,   setTypeFilter]   = useState('All');
-  const [statusFilter, setStatusFilter] = useState('All');
-  const [confirm,      setConfirm]      = useState(null); // { action, user }
-  const [actionLoading,setActionLoading]= useState(false);
-  const [toast,        setToast]        = useState(null); // { msg, type }
-  const [tooltip,      setTooltip]      = useState(null); // userid of hovered protected row
+  const [users,         setUsers]         = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [refreshing,    setRefreshing]    = useState(false);
+  const [search,        setSearch]        = useState('');
+  const [typeFilter,    setTypeFilter]    = useState('All');
+  const [statusFilter,  setStatusFilter]  = useState('All');
+  const [confirm,       setConfirm]       = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [toast,         setToast]         = useState(null);
+  const [tooltip,       setTooltip]       = useState(null);
 
   useEffect(() => {
     if (can('ADM_USER') || isAdmin) fetchUsers();
@@ -75,7 +78,7 @@ export default function UserManagementPage() {
     setTimeout(() => setToast(null), 3500);
   }
 
-  /* ── Access guard (rendered after hooks) ── */
+  /* ── Access guard ── */
   if (!can('ADM_USER') && !isAdmin) {
     return (
       <div className="um-blocked">
@@ -96,7 +99,7 @@ export default function UserManagementPage() {
       const { error } = await supabase
         .from('user')
         .update({ record_status: newStatus })
-        .eq('userId', user.userId)
+        .eq('userid', user.userid)
         .neq('user_type', 'SUPERADMIN'); // RLS guard at DB level too
 
       if (error) throw error;
@@ -135,7 +138,7 @@ export default function UserManagementPage() {
   /* ── Can current user act on target? ── */
   function canAct(target) {
     if (!target) return false;
-    if (target.userId === (currentUser?.userId || currentUser?.id)) return false; // can't act on self
+    if (target.userid === currentUser?.userid) return false; // can't act on self
     if (target.user_type === 'SUPERADMIN') return false;     // superadmin protected
     return isAdmin;
   }
