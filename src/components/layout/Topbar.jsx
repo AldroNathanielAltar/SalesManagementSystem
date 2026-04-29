@@ -9,10 +9,8 @@ export default function Topbar({ onMenuClick, title }) {
   const [showSwitch, setShowSwitch]  = useState(false);
   const { notifications, markRead, markAllRead } = useApp();
   const { currentUser, users, switchSession, isSuperAdmin } = useAuth();
-  const unread = notifications.filter(n => !n.read).length;
-
-  // Only active users can be switched to (demo only)
-  const switchableUsers = users.filter(u => u.status === 'Active');
+  const unread = (notifications || []).filter(n => !n.read).length;
+  const switchableUsers = (users || []).filter(u => u.status === 'Active');
 
   return (
     <header className="topbar">
