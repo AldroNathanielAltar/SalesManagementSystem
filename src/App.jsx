@@ -20,10 +20,8 @@ import SalesListPage    from "./pages/SalesListPage";
 import SalesDetailPage  from "./pages/SalesDetailPage";
 import DeletedItemsPage from "./pages/DeletedItemsPage";
 import Reports from "./pages/ReportsPage";
-import { AdminPage }    from "./pages/PlaceholderPages";
-
-// Sprint 3 pages
-import UserManagementPage from "./pages/UserManagementPage";  // ← fixed
+import Users from "./pages/UserManagementPage";
+import { AdminPage } from "./pages/PlaceholderPages";
 
 // PR-04 — read-only lookup pages
 import {
@@ -52,20 +50,41 @@ export default function App() {
                   <ProtectedRoute>
                     <Layout>
                       <Routes>
-                        <Route index element={<Navigate to="/sales" replace />} />
+                        <Route
+                          index
+                          element={<Navigate to="/sales" replace />}
+                        />
 
-                        {/* Sales */}
-                        <Route path="sales"            element={<SalesListPage />} />
-                        <Route path="sales/:transNo"   element={<SalesDetailPage />} />
+                        {/* PR-01 + PR-02 + PR-03 — Sales */}
+                        <Route path="sales" element={<SalesListPage />} />
+                        <Route
+                          path="sales/:transNo"
+                          element={<SalesDetailPage />}
+                        />
 
-                        {/* Read-only Lookups */}
-                        <Route path="lookups/customers" element={<CustomerLookupPage />} />
-                        <Route path="lookups/employees" element={<EmployeeLookupPage />} />
-                        <Route path="lookups/products"  element={<ProductLookupPage />} />
-                        <Route path="lookups/prices"    element={<PriceHistoryPage />} />
+                        {/* PR-04 — Read-only Lookups */}
+                        <Route
+                          path="lookups/customers"
+                          element={<CustomerLookupPage />}
+                        />
+                        <Route
+                          path="lookups/employees"
+                          element={<EmployeeLookupPage />}
+                        />
+                        <Route
+                          path="lookups/products"
+                          element={<ProductLookupPage />}
+                        />
+                        <Route
+                          path="lookups/prices"
+                          element={<PriceHistoryPage />}
+                        />
 
-                        {/* Deleted Items */}
-                        <Route path="deleted-items" element={<DeletedItemsPage />} />
+                        {/* PR-05 — Deleted Items */}
+                        <Route
+                          path="deleted-items"
+                          element={<DeletedItemsPage />}
+                        />
 
                         {/* Reports & Admin */}
                         <Route path="reports" element={<Reports />} />
@@ -74,7 +93,10 @@ export default function App() {
                         {/* Sprint 3 — User Management (ADM_USER gated) */}
                         <Route path="users" element={<UserManagementPage />} />
 
-                        <Route path="*" element={<Navigate to="/sales" replace />} />
+                        <Route
+                          path="*"
+                          element={<Navigate to="/sales" replace />}
+                        />
                       </Routes>
                     </Layout>
                   </ProtectedRoute>
