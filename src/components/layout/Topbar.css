@@ -1,0 +1,114 @@
+.topbar {
+  position:fixed; top:0; left:var(--sidebar-w); right:0;
+  height:var(--topbar-h);
+  background:#fff; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 22px; z-index:40;
+  box-shadow: 0 1px 0 var(--border);
+}
+.tb-left  { display:flex; align-items:center; gap:14px; }
+.tb-right { display:flex; align-items:center; gap:8px;  }
+
+.tb-menu-btn {
+  display:none; align-items:center; justify-content:center;
+  width:34px; height:34px; border-radius:7px;
+  color:var(--text-secondary); background:var(--bg-elevated);
+  border:1px solid var(--border);
+  transition:all var(--transition);
+}
+.tb-menu-btn:hover { background:var(--bg-hover); color:var(--text-primary); }
+
+.tb-title { font-size:16px; font-weight:700; color:var(--text-primary); }
+
+.tb-icon-btn {
+  position:relative;
+  display:flex; align-items:center; justify-content:center;
+  width:36px; height:36px; border-radius:8px;
+  color:var(--text-secondary); background:#fff;
+  border:1px solid var(--border);
+  transition:all var(--transition);
+}
+.tb-icon-btn:hover { background:var(--bg-hover); color:var(--text-primary); }
+
+.notif-badge {
+  position:absolute; top:-4px; right:-4px;
+  min-width:16px; height:16px;
+  background:var(--red); color:#fff;
+  font-size:9px; font-weight:700; border-radius:99px;
+  display:flex; align-items:center; justify-content:center;
+  padding:0 3px;
+}
+
+.tb-rel { position:relative; }
+
+.tb-dropdown {
+  position:absolute; top:calc(100% + 8px); right:0;
+  background:#fff; border:1px solid var(--border);
+  border-radius:var(--radius-lg); box-shadow:var(--shadow-lg);
+  z-index:300; overflow:hidden;
+  animation:fadeIn .15s ease;
+}
+
+/* Notifs */
+.notif-panel { width:300px; }
+.notif-head {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 14px; border-bottom:1px solid var(--border);
+  font-size:13px; font-weight:600;
+}
+.notif-mark-all {
+  display:flex; align-items:center; gap:3px;
+  font-size:11px; color:var(--accent); font-weight:500;
+}
+.notif-mark-all:hover { opacity:.7; }
+.notif-item {
+  display:flex; align-items:flex-start; gap:10px;
+  padding:10px 14px; cursor:pointer;
+  border-bottom:1px solid var(--border);
+  transition:background var(--transition);
+}
+.notif-item:last-child { border-bottom:none; }
+.notif-item:hover { background:var(--bg-hover); }
+.notif-dot {
+  width:7px; height:7px; border-radius:50%;
+  background:transparent; margin-top:5px; flex-shrink:0;
+}
+.notif-item.unread .notif-dot { background:var(--accent); }
+.notif-text { font-size:13px; color:var(--text-primary); line-height:1.4; }
+.notif-time { font-size:11px; color:var(--text-muted); margin-top:2px; }
+
+/* Switch panel */
+.tb-switch-btn { gap:5px; }
+.tb-switch-panel { width:260px; padding:6px; }
+.tb-dd-label { font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted); padding:4px 8px 6px; }
+.tb-switch-item {
+  display:flex; align-items:center; gap:9px;
+  padding:8px; border-radius:7px; width:100%;
+  font-size:13px; text-align:left;
+  transition:background var(--transition);
+}
+.tb-switch-item:hover { background:var(--bg-hover); }
+.tb-switch-item.current { background:var(--accent-dim); }
+.tb-sw-avatar {
+  width:28px; height:28px; border-radius:6px;
+  background:var(--navy); color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font-size:10px; font-weight:700; flex-shrink:0;
+}
+.tb-sw-name  { display:block; font-weight:500; color:var(--text-primary); }
+.tb-sw-role  { display:block; font-size:10px; font-weight:600; letter-spacing:.04em; }
+.tb-sw-role.super_admin { color:var(--amber); }
+.tb-sw-role.admin       { color:var(--accent); }
+.tb-sw-current { margin-left:auto; color:var(--accent); font-size:16px; }
+
+.tb-avatar {
+  width:34px; height:34px; border-radius:8px;
+  background:var(--navy); color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:700; cursor:pointer;
+}
+
+@media(max-width:768px) {
+  .topbar { left:0; }
+  .tb-menu-btn { display:flex; }
+}
