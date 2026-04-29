@@ -35,8 +35,8 @@ export function AuthProvider({ children }) {
 
     const { data: userRow, error } = await supabase
       .from("user")
-      .select("userId, username, user_type, record_status")
-      .eq("userId", session.user.id)
+      .select("userid, username, user_type, record_status")
+      .eq("userid", session.user.id)
       .single();
 
     if (error || !userRow) {
@@ -53,7 +53,7 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    setCurrentUser({ ...session.user, ...userRow });
+    setCurrentUser({ ...session.user, ...userRow, userId: userRow.userid })
     setAuthLoading(false);
   }
 
