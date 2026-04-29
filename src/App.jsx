@@ -19,8 +19,8 @@ import AuthCallbackPage from "./pages/AuthCallbackPage";
 import SalesListPage from "./pages/SalesListPage";
 import SalesDetailPage from "./pages/SalesDetailPage";
 import DeletedItemsPage from "./pages/DeletedItemsPage";
-import Reports from "./pages/Reports";
-import Users from "./pages/Users";
+import Reports from "./pages/ReportsPage";
+import Users from "./pages/UserManagementPage";
 import { AdminPage } from "./pages/PlaceholderPages";
 
 // PR-04 — read-only lookup pages
@@ -50,27 +50,51 @@ export default function App() {
                   <ProtectedRoute>
                     <Layout>
                       <Routes>
-                        <Route index element={<Navigate to="/sales" replace />} />
+                        <Route
+                          index
+                          element={<Navigate to="/sales" replace />}
+                        />
 
                         {/* PR-01 + PR-02 + PR-03 — Sales */}
                         <Route path="sales" element={<SalesListPage />} />
-                        <Route path="sales/:transNo" element={<SalesDetailPage />} />
+                        <Route
+                          path="sales/:transNo"
+                          element={<SalesDetailPage />}
+                        />
 
                         {/* PR-04 — Read-only Lookups */}
-                        <Route path="lookups/customers" element={<CustomerLookupPage />} />
-                        <Route path="lookups/employees" element={<EmployeeLookupPage />} />
-                        <Route path="lookups/products" element={<ProductLookupPage />} />
-                        <Route path="lookups/prices" element={<PriceHistoryPage />} />
+                        <Route
+                          path="lookups/customers"
+                          element={<CustomerLookupPage />}
+                        />
+                        <Route
+                          path="lookups/employees"
+                          element={<EmployeeLookupPage />}
+                        />
+                        <Route
+                          path="lookups/products"
+                          element={<ProductLookupPage />}
+                        />
+                        <Route
+                          path="lookups/prices"
+                          element={<PriceHistoryPage />}
+                        />
 
                         {/* PR-05 — Deleted Items */}
-                        <Route path="deleted-items" element={<DeletedItemsPage />} />
+                        <Route
+                          path="deleted-items"
+                          element={<DeletedItemsPage />}
+                        />
 
                         {/* Reports & Admin */}
                         <Route path="reports" element={<Reports />} />
                         <Route path="admin" element={<AdminPage />} />
                         <Route path="users" element={<Users />} />
 
-                        <Route path="*" element={<Navigate to="/sales" replace />} />
+                        <Route
+                          path="*"
+                          element={<Navigate to="/sales" replace />}
+                        />
                       </Routes>
                     </Layout>
                   </ProtectedRoute>
