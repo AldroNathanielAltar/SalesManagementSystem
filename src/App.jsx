@@ -1,23 +1,23 @@
 // src/App.jsx
 
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "./context/AuthContext";
-import { AppProvider } from "./context/AppContext";
-import { UserRightsProvider } from "./context/UserRightsContext";
-import Layout from "./components/layout/Layout";
-import ProtectedRoute from "./components/ui/ProtectedRoute";
+import { AuthProvider }        from "./context/AuthContext";
+import { AppProvider }         from "./context/AppContext";
+import { UserRightsProvider }  from "./context/UserRightsContext";
+import Layout                  from "./components/layout/Layout";
+import ProtectedRoute          from "./components/ui/ProtectedRoute";
 
 // Responsive fixes (PR-06)
 import "./pages/Responsive.css";
 
 // Auth pages
-import LoginPage from "./pages/LoginPage";
-import RegisterPage from "./pages/RegisterPage";
+import LoginPage       from "./pages/LoginPage";
+import RegisterPage    from "./pages/RegisterPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
 
 // Sprint 2 pages
-import SalesListPage from "./pages/SalesListPage";
-import SalesDetailPage from "./pages/SalesDetailPage";
+import SalesListPage    from "./pages/SalesListPage";
+import SalesDetailPage  from "./pages/SalesDetailPage";
 import DeletedItemsPage from "./pages/DeletedItemsPage";
 import Reports from "./pages/ReportsPage";
 import Users from "./pages/UserManagementPage";
@@ -39,9 +39,9 @@ export default function App() {
           <BrowserRouter>
             <Routes>
               {/* Public */}
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/auth/callback" element={<AuthCallbackPage />} />
+              <Route path="/login"          element={<LoginPage />} />
+              <Route path="/register"       element={<RegisterPage />} />
+              <Route path="/auth/callback"  element={<AuthCallbackPage />} />
 
               {/* Protected */}
               <Route
@@ -88,8 +88,10 @@ export default function App() {
 
                         {/* Reports & Admin */}
                         <Route path="reports" element={<Reports />} />
-                        <Route path="admin" element={<AdminPage />} />
-                        <Route path="users" element={<Users />} />
+                        <Route path="admin"   element={<AdminPage />} />
+
+                        {/* Sprint 3 — User Management (ADM_USER gated) */}
+                        <Route path="users" element={<UserManagementPage />} />
 
                         <Route
                           path="*"

@@ -1,11 +1,10 @@
 // src/components/layout/Sidebar.jsx
-// PR-03: feat/rights-stamp-sidebar
-// M4 – Rights & Auth Specialist | Sprint 2
+// PR-01: feat/rights-admin-gating
+// M4 – Rights & Auth Specialist | Sprint 3
 //
-// Changes:
-// - Removed broken isSuperAdmin/isAdmin from useAuth (not in AuthContext)
-// - Sidebar Admin + Deleted Items links hidden for USER via user_type check
-// - Logout wired to signOut() from AuthContext (no more TODO)
+// Changes from Sprint 2:
+// - Added useRights() import
+// - Users link visible only when ADM_USER === 1
 
 import { NavLink, useNavigate } from "react-router-dom";
 import {
@@ -21,41 +20,15 @@ import {
   LogOut,
   Shield,
   Crown,
+  UserCog,
 } from "lucide-react";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth }   from "../../context/AuthContext";
+import { useRights } from "../../context/UserRightsContext";
 import "./Sidebar.css";
-
-const NAV_GROUPS = [
-  {
-    label: "Sales",
-    items: [{ to: "/sales", icon: ShoppingCart, label: "Transactions" }],
-  },
-  {
-    label: "Lookups",
-    items: [
-      { to: "/lookups/customers", icon: Users,   label: "Customers" },
-      { to: "/lookups/employees", icon: Users,   label: "Employees" },
-      { to: "/lookups/products",  icon: Package, label: "Products" },
-      { to: "/lookups/prices",    icon: Tag,     label: "Price History" },
-    ],
-  },
-  {
-    label: "Analytics",
-    items: [{ to: "/reports", icon: BarChart3, label: "Reports" }],
-  },
-  {
-    // adminOnly: true — hidden for USER accounts
-    label: "Admin",
-    adminOnly: true,
-    items: [
-      { to: "/admin",        icon: ShieldCheck, label: "Admin" },
-      { to: "/deleted-items", icon: Trash2,     label: "Deleted Items" },
-    ],
-  },
-];
 
 export default function Sidebar({ open, onClose }) {
   const { currentUser, signOut } = useAuth()
+  const { can } = useRights()
   const nav = useNavigate()
 
   const isSuperAdmin = currentUser?.user_type === 'SUPERADMIN'
@@ -85,29 +58,76 @@ export default function Sidebar({ open, onClose }) {
         </div>
 
         <nav className="sb-nav">
-          {NAV_GROUPS.map((group) => {
-            // Hide Admin group entirely for USER accounts
-            if (group.adminOnly && !isAdmin) return null
-            return (
-              <div key={group.label} className="sb-group">
-                <p className="sb-group-label">{group.label}</p>
-                {group.items.map(({ to, icon: Icon, label }) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    className={({ isActive }) =>
-                      `sb-item ${isActive ? "active" : ""}`
-                    }
-                    onClick={onClose}
-                  >
-                    <Icon size={16} />
-                    <span>{label}</span>
-                    <ChevronRight size={12} className="sb-arrow" />
-                  </NavLink>
-                ))}
-              </div>
-            )
-          })}
+          {/* Sales */}
+          <div className="sb-group">
+            <p className="sb-group-label">Sales</p>
+            <NavLink to="/sales"
+              className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
+              onClick={onClose}>
+              <ShoppingCart size={16} /><span>Transactions</span>
+              <ChevronRight size={12} className="sb-arrow" />
+            </NavLink>
+          </div>
+
+          {/* Lookups */}
+          <div className="sb-group">
+            <p className="sb-group-label">Lookups</p>
+            {[
+              { to: "/lookups/customers", icon: Users,   label: "Customers"     },
+              { to: "/lookups/employees", icon: Users,   label: "Employees"     },
+              { to: "/lookups/products",  icon: Package, label: "Products"      },
+              { to: "/lookups/prices",    icon: Tag,     label: "Price History" },
+            ].map(({ to, icon: Icon, label }) => (
+              <NavLink key={to} to={to}
+                className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
+                onClick={onClose}>
+                <Icon size={16} /><span>{label}</span>
+                <ChevronRight size={12} className="sb-arrow" />
+              </NavLink>
+            ))}
+          </div>
+
+          {/* Analytics */}
+          <div className="sb-group">
+            <p className="sb-group-label">Analytics</p>
+            <NavLink to="/reports"
+              className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
+              onClick={onClose}>
+              <BarChart3 size={16} /><span>Reports</span>
+              <ChevronRight size={12} className="sb-arrow" />
+            </NavLink>
+          </div>
+
+          {/* Admin — hidden for USER accounts */}
+          {isAdmin && (
+            <div className="sb-group">
+              <p className="sb-group-label">Admin</p>
+
+              {/* Users link — gated by ADM_USER right */}
+              {can('ADM_USER') && (
+                <NavLink to="/users"
+                  className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
+                  onClick={onClose}>
+                  <UserCog size={16} /><span>Users</span>
+                  <ChevronRight size={12} className="sb-arrow" />
+                </NavLink>
+              )}
+
+              <NavLink to="/admin"
+                className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
+                onClick={onClose}>
+                <ShieldCheck size={16} /><span>Admin</span>
+                <ChevronRight size={12} className="sb-arrow" />
+              </NavLink>
+
+              <NavLink to="/deleted-items"
+                className={({ isActive }) => `sb-item ${isActive ? "active" : ""}`}
+                onClick={onClose}>
+                <Trash2 size={16} /><span>Deleted Items</span>
+                <ChevronRight size={12} className="sb-arrow" />
+              </NavLink>
+            </div>
+          )}
         </nav>
 
         <div className="sb-footer">
