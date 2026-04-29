@@ -91,7 +91,7 @@ export default function App() {
                         <Route path="admin"   element={<AdminPage />} />
 
                         {/* Sprint 3 — User Management (ADM_USER gated) */}
-                        <Route path="users" element={<UserManagementPage />} />
+                        <Route path="users" element={<Users />} />
 
                         <Route
                           path="*"
