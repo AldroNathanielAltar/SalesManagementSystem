@@ -8,10 +8,22 @@ export default function AuthCallbackPage() {
   const nav = useNavigate();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) {
+        nav('/login', { replace: true });
+        return;
+      }
+
+      const { data: userRow } = await supabase
+        .from('user')
+        .select('record_status')
+        .eq('userid', session.user.id)
+        .single();
+
+      if (userRow?.record_status === 'ACTIVE') {
         nav('/sales', { replace: true });
       } else {
+        await supabase.auth.signOut();
         nav('/login?error=not_activated', { replace: true });
       }
     });
