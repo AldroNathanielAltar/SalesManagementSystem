@@ -31,10 +31,10 @@ export default function SalesListPage() {
 
   // USER sees ACTIVE only (RLS handles it on DB, this is the UI filter)
   const visibleSales = useMemo(() =>
-    isAdmin ? sales : sales.filter(s => s.record_status === 'ACTIVE'),
+    isAdmin ? (sales || []) : (sales || []).filter(s => s.record_status === 'ACTIVE'),
   [sales, isAdmin]);
 
-  const filtered = useMemo(() => visibleSales.filter(s => {
+  const filtered = useMemo(() => (visibleSales || []).filter(s => {
     const q = search.toLowerCase();
     const matchSearch = !search ||
       s.transNo.toLowerCase().includes(q) ||
@@ -46,19 +46,18 @@ export default function SalesListPage() {
   }), [visibleSales, search, dateFrom, dateTo]);
 
   function lineCount(transNo) {
-    return salesDetail.filter(d => d.transNo === transNo && d.record_status === 'ACTIVE').length;
+    return (salesDetail || []).filter(d => d.transNo === transNo && d.record_status === 'ACTIVE').length;
   }
   function rowTotal(transNo) {
-    return salesDetail
+    return (salesDetail || [])
       .filter(d => d.transNo === transNo && d.record_status === 'ACTIVE')
       .reduce((s, d) => s + d.qty * (d.unitPrice ?? d.unit_price ?? 0), 0);
   }
 
-  const activeCount   = sales.filter(s => s.record_status === 'ACTIVE').length;
-  const inactiveCount = sales.filter(s => s.record_status === 'INACTIVE').length;
-  const activeRevenue = sales
+  const activeCount   = (sales || []).filter(s => s.record_status === 'ACTIVE').length;
+  const inactiveCount = (sales || []).filter(s => s.record_status === 'INACTIVE').length;
+  const activeRevenue = (sales || [])
     .filter(s => s.record_status === 'ACTIVE')
-    .reduce((acc, s) => acc + rowTotal(s.transNo), 0);
 
   return (
     <div className="fade-in">
