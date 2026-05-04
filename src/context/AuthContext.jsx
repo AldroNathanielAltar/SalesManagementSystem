@@ -21,6 +21,7 @@ export function AuthProvider({ children }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_IN" && session) await resolveUser(session);
+      if (event === "TOKEN_REFRESHED" && session) await resolveUser(session);
       if (event === "SIGNED_OUT") {
         setCurrentUser(null);
         setAuthLoading(false);
