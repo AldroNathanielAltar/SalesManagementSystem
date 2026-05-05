@@ -1,5 +1,8 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
+// src/context/AuthContext.jsx
+// fix: userid casing + TOKEN_REFRESHED handler to prevent tab switch reload
+
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { supabase } from "../lib/supabaseClient.js";
 
 const AuthContext = createContext(null);
 
@@ -7,6 +10,7 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
+  const currentUserRef = useRef(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -18,9 +22,13 @@ export function AuthProvider({ children }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_IN" && session) await resolveUser(session);
-      if (event === "TOKEN_REFRESHED" && session) await resolveUser(session);
+      if (event === "TOKEN_REFRESHED" && session) {
+        // Only re-resolve if no currentUser yet — prevent unnecessary re-fetch on tab switch
+        if (!currentUserRef.current) await resolveUser(session);
+      }
       if (event === "SIGNED_OUT") {
         setCurrentUser(null);
+        currentUserRef.current = null;
         setAuthLoading(false);
       }
     });
@@ -33,8 +41,8 @@ export function AuthProvider({ children }) {
 
     const { data: userRow, error } = await supabase
       .from("user")
-      .select("userid, username, user_type, record_status")
-      .eq("userid", session.user.id)
+      .select("userid, username, user_type, record_status")  // ← lowercase
+      .eq("userid", session.user.id)                         // ← lowercase
       .single();
 
     if (error || !userRow) {
@@ -51,19 +59,15 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    setCurrentUser({
-      ...session.user,
-      userid: userRow.userid,
-      userId: userRow.userid, // both casings for compatibility
-      username: userRow.username,
-      user_type: userRow.user_type,
-      record_status: userRow.record_status,
-    });
+    const user = { ...session.user, ...userRow, userId: userRow.userid }
+    setCurrentUser(user);
+    currentUserRef.current = user;  // ← keep ref in sync
     setAuthLoading(false);
   }
 
   async function signOut() {
     setAuthLoading(true);
+    currentUserRef.current = null;
     await supabase.auth.signOut();
   }
 
