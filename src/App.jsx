@@ -1,5 +1,3 @@
-// src/App.jsx
-
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { AppProvider } from "./context/AppContext";
@@ -7,10 +5,9 @@ import { UserRightsProvider } from "./context/UserRightsContext";
 import Layout from "./components/layout/Layout";
 import ProtectedRoute from "./components/ui/ProtectedRoute";
 
-// Responsive fixes
 import "./pages/Responsive.css";
 
-// Auth pages
+// Auth
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
@@ -28,7 +25,7 @@ import {
   PriceHistoryPage,
 } from "./pages/LookupPages";
 
-// Sprint 3 — Reports (named exports — NOT a default export)
+// Sprint 3 — Reports (4 named exports)
 import {
   SalesByEmployeePage,
   SalesByCustomerPage,
@@ -38,7 +35,6 @@ import {
 
 // Sprint 3 — Admin
 import UserManagementPage from "./pages/UserManagementPage";
-import { AdminPage } from "./pages/PlaceholderPages";
 
 export default function App() {
   return (
@@ -47,12 +43,12 @@ export default function App() {
         <UserRightsProvider>
           <BrowserRouter>
             <Routes>
-              {/* ── Public ── */}
+              {/* Public */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
-              {/* ── Protected ── */}
+              {/* Protected */}
               <Route
                 path="/*"
                 element={
@@ -95,7 +91,7 @@ export default function App() {
                           element={<DeletedItemsPage />}
                         />
 
-                        {/* Reports — 4 sub-pages */}
+                        {/* Reports */}
                         <Route
                           path="reports/by-employee"
                           element={<SalesByEmployeePage />}
@@ -112,7 +108,6 @@ export default function App() {
                           path="reports/monthly"
                           element={<MonthlySalesTrendPage />}
                         />
-                        {/* /reports → redirect to first report */}
                         <Route
                           path="reports"
                           element={
@@ -130,7 +125,6 @@ export default function App() {
                           element={<Navigate to="/admin/users" replace />}
                         />
 
-                        {/* Fallback */}
                         <Route
                           path="*"
                           element={<Navigate to="/sales" replace />}

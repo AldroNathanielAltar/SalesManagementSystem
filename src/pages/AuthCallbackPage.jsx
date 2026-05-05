@@ -1,19 +1,32 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TrendingUp } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
 import './Auth.css';
 
 export default function AuthCallbackPage() {
   const nav = useNavigate();
 
   useEffect(() => {
-    // TODO: wire real Supabase session exchange
-    // supabase.auth.getSession().then(({ data: { session } }) => {
-    //   if (session) nav('/sales');
-    //   else nav('/login?error=not_activated');
-    // });
-    const timer = setTimeout(() => nav('/sales'), 2000);
-    return () => clearTimeout(timer);
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) {
+        nav('/login', { replace: true });
+        return;
+      }
+
+      const { data: userRow } = await supabase
+        .from('user')
+        .select('record_status')
+        .eq('userid', session.user.id)
+        .single();
+
+      if (userRow?.record_status === 'ACTIVE') {
+        nav('/sales', { replace: true });
+      } else {
+        await supabase.auth.signOut();
+        nav('/login?error=not_activated', { replace: true });
+      }
+    });
   }, [nav]);
 
   return (

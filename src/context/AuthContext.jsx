@@ -14,11 +14,8 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        resolveUser(session);
-      } else {
-        setAuthLoading(false);
-      }
+      if (session) resolveUser(session);
+      else setAuthLoading(false);
     });
 
     const {
@@ -74,6 +71,8 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut();
   }
 
+  // Exports: currentUser, authLoading, authError, setAuthError, signOut
+  // currentUser.user_type: 'SUPERADMIN' | 'ADMIN' | 'USER'
   return (
     <AuthContext.Provider
       value={{ currentUser, authLoading, authError, setAuthError, signOut }}
