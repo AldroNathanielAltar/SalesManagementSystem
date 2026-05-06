@@ -12,27 +12,47 @@ export default function ProtectedRoute({ children }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "var(--bg-base)",
+          background: "#f0f2f5",
         }}
       >
         <div
           style={{
-            width: 36,
-            height: 36,
-            border: "3px solid var(--border)",
-            borderTopColor: "var(--accent)",
-            borderRadius: "50%",
-            animation: "spin .8s linear infinite",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 16,
           }}
-        />
-        <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
+        >
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              border: "3px solid #e2e6ed",
+              borderTopColor: "#2563eb",
+              borderRadius: "50%",
+              animation: "spin .8s linear infinite",
+            }}
+          />
+          <p
+            style={{ color: "#6b7280", fontSize: 14, fontFamily: "sans-serif" }}
+          >
+            Verifying session…
+          </p>
+        </div>
+        <style>{`
+          @keyframes spin { from { transform:rotate(0) } to { transform:rotate(360deg) } }
+        `}</style>
       </div>
     );
   }
 
+  // No user → go to login
   if (!currentUser) return <Navigate to="/login" replace />;
-  if (currentUser.record_status === "INACTIVE")
+
+  // Inactive user
+  if (currentUser.record_status === "INACTIVE") {
     return <Navigate to="/login?error=not_activated" replace />;
+  }
 
   return children;
 }
