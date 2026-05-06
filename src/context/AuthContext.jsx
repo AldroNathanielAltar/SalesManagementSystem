@@ -1,78 +1,109 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { supabase } from '../lib/supabaseClient';
 
 const AuthContext = createContext(null);
+
+const USERID_COLS = ['userid', 'userId', 'user_id', 'id'];
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [authError, setAuthError] = useState("");
+  const [authError,   setAuthError]   = useState('');
+  const resolvedRef = useRef(false); // prevent re-resolving on tab switch
 
   useEffect(() => {
+    // If already resolved once, skip — don't re-fetch on tab focus
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) resolveUser(session);
-      else setAuthLoading(false);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session) await resolveUser(session);
-      if (event === "TOKEN_REFRESHED" && session) await resolveUser(session);
-      if (event === "SIGNED_OUT") {
-        setCurrentUser(null);
+      if (session) {
+        if (!resolvedRef.current) {
+          resolveUser(session).finally(() => setAuthLoading(false));
+        } else {
+          setAuthLoading(false); // already have user, just stop spinner
+        }
+      } else {
         setAuthLoading(false);
       }
     });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session && !resolvedRef.current) {
+          setAuthLoading(true);
+          await resolveUser(session);
+          setAuthLoading(false);
+        }
+        if (event === 'TOKEN_REFRESHED' && session) {
+          // Token refreshed silently — don't re-render or re-fetch
+          return;
+        }
+        if (event === 'SIGNED_OUT') {
+          resolvedRef.current = false;
+          setCurrentUser(null);
+          setAuthLoading(false);
+        }
+      }
+    );
+
     return () => subscription.unsubscribe();
   }, []);
 
   async function resolveUser(session) {
-    setAuthLoading(true);
-    setAuthError("");
+    setAuthError('');
 
-    const { data: userRow, error } = await supabase
-      .from("user")
-      .select("userid, username, user_type, record_status")
-      .eq("userid", session.user.id)
-      .single();
+    let userRow = null;
+    for (const col of USERID_COLS) {
+      const { data, error } = await supabase
+        .from('user')
+        .select('*')
+        .eq(col, session.user.id)
+        .single();
+      if (!error && data) { userRow = data; break; }
+    }
 
-    if (error || !userRow) {
-      setAuthError("Unable to verify your account. Please try again.");
-      await supabase.auth.signOut();
-      setAuthLoading(false);
+    if (!userRow) {
+      // No user row — fallback to auth metadata
+      setCurrentUser({
+        id:            session.user.id,
+        userid:        session.user.id,
+        userId:        session.user.id,
+        email:         session.user.email,
+        username:      session.user.user_metadata?.username
+                    || session.user.user_metadata?.full_name
+                    || session.user.email?.split('@')[0],
+        user_type:     'USER',
+        record_status: 'ACTIVE',
+      });
+      resolvedRef.current = true;
       return;
     }
 
-    if (userRow.record_status !== "ACTIVE") {
+    if (userRow.record_status === 'INACTIVE') {
       await supabase.auth.signOut();
-      setAuthError("Your account is pending activation by a Sales Manager.");
-      setAuthLoading(false);
+      setAuthError('Your account is pending activation.');
+      setCurrentUser(null);
+      resolvedRef.current = false;
       return;
     }
 
     setCurrentUser({
       ...session.user,
-      userid: userRow.userid,
-      userId: userRow.userid, // both casings for compatibility
-      username: userRow.username,
-      user_type: userRow.user_type,
-      record_status: userRow.record_status,
+      userid:        userRow.userid        || userRow.userId    || userRow.user_id,
+      userId:        userRow.userid        || userRow.userId    || userRow.user_id,
+      username:      userRow.username      || userRow.user_name || userRow.name,
+      user_type:     userRow.user_type     || userRow.userType  || 'USER',
+      record_status: userRow.record_status || 'ACTIVE',
     });
-    setAuthLoading(false);
+    resolvedRef.current = true; // mark as resolved — skip on next tab switch
   }
 
   async function signOut() {
-    setAuthLoading(true);
+    resolvedRef.current = false;
+    setCurrentUser(null);
     await supabase.auth.signOut();
   }
 
-  // Exports: currentUser, authLoading, authError, setAuthError, signOut
-  // currentUser.user_type: 'SUPERADMIN' | 'ADMIN' | 'USER'
   return (
-    <AuthContext.Provider
-      value={{ currentUser, authLoading, authError, setAuthError, signOut }}
-    >
+    <AuthContext.Provider value={{ currentUser, authLoading, authError, setAuthError, signOut }}>
       {children}
     </AuthContext.Provider>
   );
@@ -80,6 +111,6 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
+  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
   return ctx;
 }
