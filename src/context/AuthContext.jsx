@@ -1,24 +1,24 @@
+// src/context/AuthContext.jsx
+// fix: add window focus handler to prevent loading stuck on tab switch
+
 import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabaseClient";
 
 const AuthContext = createContext(null);
 
-const USERID_COLS = ["userid", "userId", "user_id", "id"];
-
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
-  const resolvedRef = useRef(false); // prevent re-resolving on tab switch
+  const resolvedRef = useRef(false);
 
   useEffect(() => {
-    // If already resolved once, skip — don't re-fetch on tab focus
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         if (!resolvedRef.current) {
           resolveUser(session).finally(() => setAuthLoading(false));
         } else {
-          setAuthLoading(false); // already have user, just stop spinner
+          setAuthLoading(false);
         }
       } else {
         setAuthLoading(false);
@@ -44,27 +44,30 @@ export function AuthProvider({ children }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Fix: when user returns to tab, stop loading if already resolved
+    const handleFocus = () => {
+      if (resolvedRef.current) {
+        setAuthLoading(false);
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   async function resolveUser(session) {
     setAuthError("");
 
-    let userRow = null;
-    for (const col of USERID_COLS) {
-      const { data, error } = await supabase
-        .from("user")
-        .select("*")
-        .eq(col, session.user.id)
-        .single();
-      if (!error && data) {
-        userRow = data;
-        break;
-      }
-    }
+    const { data: userRow, error } = await supabase
+      .from("user")
+      .select("userid, username, user_type, record_status")
+      .eq("userid", session.user.id)
+      .single();
 
-    if (!userRow) {
-      // No user row — fallback to auth metadata
+    if (!userRow || error) {
       setCurrentUser({
         id: session.user.id,
         userid: session.user.id,
@@ -91,13 +94,13 @@ export function AuthProvider({ children }) {
 
     setCurrentUser({
       ...session.user,
-      userid: userRow.userid || userRow.userId || userRow.user_id,
-      userId: userRow.userid || userRow.userId || userRow.user_id,
-      username: userRow.username || userRow.user_name || userRow.name,
-      user_type: userRow.user_type || userRow.userType || "USER",
+      userid: userRow.userid,
+      userId: userRow.userid,
+      username: userRow.username,
+      user_type: userRow.user_type || "USER",
       record_status: userRow.record_status || "ACTIVE",
     });
-    resolvedRef.current = true; // mark as resolved — skip on next tab switch
+    resolvedRef.current = true;
   }
 
   async function signOut() {
