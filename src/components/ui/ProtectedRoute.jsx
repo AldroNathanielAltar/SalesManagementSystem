@@ -6,9 +6,13 @@ export default function ProtectedRoute({ children }) {
 
 if (authLoading) return null;
 
+  // No user → go to login
   if (!currentUser) return <Navigate to="/login" replace />;
-  if (currentUser.record_status === "INACTIVE")
+
+  // Inactive user
+  if (currentUser.record_status === "INACTIVE") {
     return <Navigate to="/login?error=not_activated" replace />;
+  }
 
   return children;
 }
