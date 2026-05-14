@@ -1,3 +1,6 @@
+// src/context/AuthContext.jsx
+// fix: add window focus handler to prevent loading stuck on tab switch
+
 import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabaseClient";
 
