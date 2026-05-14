@@ -1,4 +1,8 @@
-
+-- ============================================================
+-- PR    : db/rls-lookup-tables
+-- Sprint: 2
+-- Author: cydencenteno-byte
+-- ============================================================
 ALTER TABLE customer ENABLE ROW LEVEL SECURITY;
 ALTER TABLE employee ENABLE ROW LEVEL SECURITY;
 ALTER TABLE product ENABLE ROW LEVEL SECURITY;
