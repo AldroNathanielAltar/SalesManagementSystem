@@ -1,4 +1,8 @@
-
+-- ============================================================
+-- PR    : db/rls-sales
+-- Sprint: 2
+-- Author: cydencenteno-byte
+-- ============================================================
 ALTER TABLE sales ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users see active sales only"
