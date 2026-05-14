@@ -115,9 +115,9 @@ export default function UserManagementPage() {
       const labels = {
         activate: `${user.username} has been activated.`,
         deactivate: `${user.username} has been deactivated.`,
-        "promote-admin": `${user.username} promoted to Admin.`,
-        "promote-superadmin": `${user.username} promoted to Super Admin.`,
-        "demote-user": `${user.username} demoted to User.`,
+        "promote-admin": `${user.username} promoted to Admin. They must log out and back in for changes to take effect.`,
+        "promote-superadmin": `${user.username} promoted to Super Admin. They must log out and back in for changes to take effect.`,
+        "demote-user": `${user.username} demoted to User. They must log out and back in for changes to take effect.`,
       };
       showToast(labels[action] || "Action completed.", "success");
     } catch (err) {

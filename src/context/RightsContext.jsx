@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "./AuthContext";
 import { USER_RIGHTS_MAP } from "../data/mockData";
@@ -9,17 +9,24 @@ export function RightsProvider({ children }) {
   const { currentUser } = useAuth();
   const [rights, setRights] = useState({});
   const [loadingRights, setLoadingRights] = useState(false);
+  const lastUserType = useRef(null);
 
   useEffect(() => {
     if (!currentUser) {
       setRights({});
+      lastUserType.current = null;
       return;
     }
-    const uid = currentUser.userid || currentUser.userId || currentUser.id;
-    if (uid) loadRights(uid);
-  }, [currentUser?.userid, currentUser?.userId]);
 
-  async function loadRights(userid) {
+    // Always re-load rights if user_type changed (e.g. promoted to ADMIN)
+    const uid = currentUser.userid || currentUser.userId || currentUser.id;
+    const userType = currentUser.user_type || "USER";
+
+    if (uid) loadRights(uid, userType);
+    lastUserType.current = userType;
+  }, [currentUser?.userid, currentUser?.userId, currentUser?.user_type]);
+
+  async function loadRights(userid, userType) {
     setLoadingRights(true);
     try {
       const { data, error } = await supabase
@@ -28,28 +35,39 @@ export function RightsProvider({ children }) {
         .eq("userid", userid);
 
       if (error || !data || data.length === 0) {
-        useFallback();
+        // Use role-based fallback map
+        setRights(USER_RIGHTS_MAP[userType] || USER_RIGHTS_MAP["USER"]);
         return;
       }
+
       const map = {};
       data.forEach((row) => {
         const key = row.rightid?.toUpperCase();
         if (key) map[key] = row.right_value ?? 0;
       });
-      setRights(map);
+
+      // If map is empty after parsing, use fallback
+      if (Object.keys(map).length === 0) {
+        setRights(USER_RIGHTS_MAP[userType] || USER_RIGHTS_MAP["USER"]);
+      } else {
+        setRights(map);
+      }
     } catch {
-      useFallback();
+      setRights(USER_RIGHTS_MAP[userType] || USER_RIGHTS_MAP["USER"]);
     } finally {
       setLoadingRights(false);
     }
   }
 
-  function useFallback() {
-    const type = currentUser?.user_type || "USER";
-    setRights(USER_RIGHTS_MAP[type] || USER_RIGHTS_MAP["USER"]);
-  }
-
+  // can() checks the rights map — falls back to user_type if map empty
   function can(right) {
+    if (Object.keys(rights).length === 0) {
+      // No rights loaded yet — derive from user_type directly
+      const userType = currentUser?.user_type || "USER";
+      return (
+        (USER_RIGHTS_MAP[userType] || USER_RIGHTS_MAP["USER"])[right] === 1
+      );
+    }
     return rights[right] === 1;
   }
 

@@ -17,7 +17,7 @@ import {
   Package2,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { useRights } from "../../context/UserRightsContext";
+import { useRights } from "../../context/RightsContext";
 import "./Sidebar.css";
 
 export default function Sidebar({ open, onClose }) {
@@ -25,15 +25,21 @@ export default function Sidebar({ open, onClose }) {
   const { can } = useRights();
   const nav = useNavigate();
 
-  // Derive role flags from user_type — AuthContext does NOT export these
   const userType = currentUser?.user_type || "USER";
   const isSuperAdmin = userType === "SUPERADMIN";
   const isAdmin = userType === "ADMIN" || isSuperAdmin;
   const showAdmin = can("ADM_USER") || isAdmin;
 
-  const avatarInitials = currentUser?.username
-    ? currentUser.username.slice(0, 2).toUpperCase()
-    : (currentUser?.email || "U").slice(0, 2).toUpperCase();
+  // Build display name: prefer firstName+lastName from metadata, fall back to username
+  const meta = currentUser?.user_metadata || {};
+  const firstName = meta.firstName || meta.first_name || "";
+  const lastName = meta.lastName || meta.last_name || "";
+  const fullName =
+    firstName || lastName
+      ? `${firstName} ${lastName}`.trim()
+      : currentUser?.username || currentUser?.email?.split("@")[0] || "User";
+
+  const avatarInitials = fullName.slice(0, 2).toUpperCase();
 
   async function handleLogout() {
     await signOut();
@@ -51,18 +57,15 @@ export default function Sidebar({ open, onClose }) {
           <span className="sb-logo-text">SalesFlow</span>
         </div>
 
-        <div className="sb-role-wrap">
-          <div
-            className={`sb-role-pill ${isSuperAdmin ? "super" : isAdmin ? "admin" : "user"}`}
-          >
-            {isSuperAdmin ? (
-              <Crown size={11} />
-            ) : isAdmin ? (
-              <Shield size={11} />
-            ) : null}
-            {isSuperAdmin ? "Super Admin" : isAdmin ? "Admin" : "User"}
+        {/* Role pill — only show if admin or superadmin, hide for plain USER */}
+        {(isAdmin || isSuperAdmin) && (
+          <div className="sb-role-wrap">
+            <div className={`sb-role-pill ${isSuperAdmin ? "super" : "admin"}`}>
+              {isSuperAdmin ? <Crown size={11} /> : <Shield size={11} />}
+              {isSuperAdmin ? "Super Admin" : "Admin"}
+            </div>
           </div>
-        </div>
+        )}
 
         <nav className="sb-nav">
           {/* Sales */}
@@ -141,7 +144,7 @@ export default function Sidebar({ open, onClose }) {
             ))}
           </div>
 
-          {/* Admin — gated by ADM_USER right */}
+          {/* Admin — gated */}
           {showAdmin && (
             <div className="sb-group">
               <p className="sb-group-label">Admin</p>
@@ -171,13 +174,12 @@ export default function Sidebar({ open, onClose }) {
           )}
         </nav>
 
+        {/* Footer — shows full name + email */}
         <div className="sb-footer">
           <div className="sb-user">
             <div className="sb-avatar">{avatarInitials}</div>
             <div className="sb-user-info">
-              <p className="sb-uname">
-                {currentUser?.username || currentUser?.email || "User"}
-              </p>
+              <p className="sb-uname">{fullName}</p>
               <p className="sb-uemail">{currentUser?.email || ""}</p>
             </div>
           </div>

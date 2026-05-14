@@ -1,225 +1,301 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Pencil, Trash2, RotateCcw, Loader2 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { useAuth } from '../context/AuthContext';
-import { useRights } from '../context/UserRightsContext';
-import AddLineItemModal  from './modals/AddLineItemModal';
-import EditLineItemModal from './modals/EditLineItemModal';
-import ConfirmModal      from '../components/ui/ConfirmModal';
-import './SalesDetailPage.css';
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, Loader2, Printer } from "lucide-react";
+import { supabase } from "../lib/supabaseClient";
+import { useApp } from "../context/AppContext";
+import "./SalesDetailPage.css";
 
 export default function SalesDetailPage() {
   const { transNo } = useParams();
-  const nav = useNavigate();
-  const { sales, salesDetail, softDeleteDetailLine, recoverDetailLine, loading } = useApp();
-  const { currentUser } = useAuth();
-  const { can } = useRights();
+  const navigate = useNavigate();
+  const { getCurrentPrice } = useApp();
 
-  const [modal,    setModal]    = useState(null);
-  const [selLine,  setSelLine]  = useState(null);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [sale, setSale] = useState(null);
+  const [lineItems, setLineItems] = useState([]);
+  const [error, setError] = useState(null);
 
-  const isAdmin      = currentUser?.user_type === 'ADMIN' || currentUser?.user_type === 'SUPERADMIN';
-  const isSuperAdmin = currentUser?.user_type === 'SUPERADMIN';
+  useEffect(() => {
+    const loadSaleDetails = async () => {
+      setLoading(true);
+      setError(null);
 
-  const sale = sales.find(s => s.transNo === transNo);
+      try {
+        // Load sale header with customer and employee info
+        const { data: saleData, error: saleError } = await supabase
+          .from("sales")
+          .select(
+            `
+            transno,
+            salesdate,
+            custno,
+            empno,
+            record_status,
+            stamp,
+            customer:custno (custno, custname, address, payterm),
+            employee:empno (empno, firstname, lastname)
+          `,
+          )
+          .eq("transno", transNo)
+          .single();
 
-  if (loading && !sale) {
+        if (saleError) throw saleError;
+
+        if (!saleData) {
+          setError(`Transaction ${transNo} not found.`);
+          setLoading(false);
+          return;
+        }
+
+        // Load line items from salesdetail table (no 'id' column - use transno and prodcode)
+        const { data: detailsData, error: detailsError } = await supabase
+          .from("salesdetail")
+          .select(
+            `
+            transno,
+            prodcode,
+            quantity,
+            record_status
+          `,
+          )
+          .eq("transno", transNo)
+          .eq("record_status", "ACTIVE");
+
+        if (detailsError) throw detailsError;
+
+        // Get product descriptions from product table
+        const productCodes = detailsData?.map((d) => d.prodcode) || [];
+
+        let productsData = [];
+        if (productCodes.length > 0) {
+          const { data } = await supabase
+            .from("product")
+            .select("prodcode, description, unit")
+            .in("prodcode", productCodes);
+          productsData = data || [];
+        }
+
+        const productMap = new Map();
+        productsData.forEach((p) => {
+          productMap.set(p.prodcode, {
+            description: p.description,
+            unit: p.unit,
+          });
+        });
+
+        // Calculate prices and totals for each line item
+        const itemsWithPrices = (detailsData || []).map((item, index) => {
+          const price = getCurrentPrice(item.prodcode)?.unitprice || 0;
+          const total = (item.quantity || 0) * price;
+          const product = productMap.get(item.prodcode) || {};
+
+          return {
+            key: `${item.transno}-${item.prodcode}-${index}`, // Use composite key as unique identifier
+            prodcode: item.prodcode,
+            description: product.description || item.prodcode,
+            unit: product.unit || "pc",
+            quantity: Number(item.quantity) || 0,
+            unitPrice: price,
+            total: total,
+          };
+        });
+
+        setSale({
+          transno: saleData.transno,
+          salesdate: saleData.salesdate,
+          custno: saleData.custno,
+          custname: saleData.customer?.custname || "Unknown",
+          custaddress: saleData.customer?.address,
+          custpayterm: saleData.customer?.payterm,
+          empno: saleData.empno,
+          empname: saleData.employee
+            ? `${saleData.employee.lastname}, ${saleData.employee.firstname}`
+            : "Unknown",
+          record_status: saleData.record_status,
+          stamp: saleData.stamp,
+        });
+
+        setLineItems(itemsWithPrices);
+      } catch (err) {
+        console.error("Error loading sale details:", err);
+        setError(err.message || "Failed to load transaction details");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (transNo) {
+      loadSaleDetails();
+    }
+  }, [transNo, getCurrentPrice]);
+
+  const grandTotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+  const totalItems = lineItems.length;
+
+  if (loading) {
     return (
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:48, gap:10, color:'var(--text-muted)' }}>
-        <Loader2 size={20} style={{ animation:'spin .8s linear infinite' }} />
-        <span>Loading transaction…</span>
+      <div className="loading-container">
+        <Loader2 size={24} className="spin" />
+        <p>Loading transaction details...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="error-container">
+        <h3>Error</h3>
+        <p>{error}</p>
+        <button className="btn btn-primary" onClick={() => navigate("/sales")}>
+          Back to Transactions
+        </button>
       </div>
     );
   }
 
   if (!sale) {
     return (
-      <div style={{ padding:48, textAlign:'center' }}>
-        <p style={{ color:'var(--text-muted)' }}>Transaction <strong>{transNo}</strong> not found.</p>
-        <button className="btn btn-secondary" style={{ marginTop:16 }} onClick={() => nav('/sales')}>
-          <ArrowLeft size={14} /> Back to Transactions
+      <div className="error-container">
+        <h3>Transaction Not Found</h3>
+        <p>Transaction {transNo} does not exist.</p>
+        <button className="btn btn-primary" onClick={() => navigate("/sales")}>
+          Back to Transactions
         </button>
       </div>
     );
   }
 
-  const lines = salesDetail.filter(d =>
-    d.transNo === transNo && (isAdmin ? true : d.record_status === 'ACTIVE')
-  );
-  const activeLines = lines.filter(d => d.record_status === 'ACTIVE');
-  const grandTotal  = activeLines.reduce((s, d) => s + d.qty * (d.unitPrice ?? d.unit_price ?? 0), 0);
-
-  function closeModal() { setModal(null); setSelLine(null); }
-
-  async function handleSoftDeleteLine() {
-    setActionLoading(true);
-    try { await softDeleteDetailLine(selLine.id); closeModal(); }
-    catch (err) { alert(err.message); }
-    finally { setActionLoading(false); }
-  }
-
-  async function handleRecoverLine() {
-    setActionLoading(true);
-    try { await recoverDetailLine(selLine.id); closeModal(); }
-    catch (err) { alert(err.message); }
-    finally { setActionLoading(false); }
-  }
-
   return (
     <div className="fade-in">
-      <button className="btn btn-secondary btn-sm sd-back" onClick={() => nav('/sales')}>
-        <ArrowLeft size={14} /> Back to Transactions
-      </button>
+      <div className="detail-header">
+        <button
+          className="btn btn-secondary"
+          onClick={() => navigate("/sales")}
+        >
+          <ArrowLeft size={16} /> Back to Transactions
+        </button>
+        <button className="btn btn-secondary" onClick={() => window.print()}>
+          <Printer size={16} /> Print
+        </button>
+      </div>
 
-      {/* Header card */}
-      <div className="card sd-header-card">
-        <div className="sd-header-grid">
-          <div>
-            <p className="sd-label">Transaction No</p>
-            <p className="sd-val mono">{sale.transNo}</p>
+      {/* Sale Information Card */}
+      <div className="detail-card">
+        <h2>Sale Detail</h2>
+        <div className="detail-grid">
+          <div className="detail-group">
+            <label>Transaction No:</label>
+            <span className="detail-value">{sale.transno}</span>
           </div>
-          <div>
-            <p className="sd-label">Sales Date</p>
-            <p className="sd-val">{sale.salesDate}</p>
+          <div className="detail-group">
+            <label>Sales Date:</label>
+            <span className="detail-value">
+              {new Date(sale.salesdate).toLocaleDateString()}
+            </span>
           </div>
-          <div>
-            <p className="sd-label">Customer</p>
-            <p className="sd-val">{sale.custname}</p>
-            <p className="sd-sub">{sale.custno}</p>
-          </div>
-          <div>
-            <p className="sd-label">Employee</p>
-            <p className="sd-val">{sale.empname}</p>
-            <p className="sd-sub">{sale.empno}</p>
-          </div>
-          <div>
-            <p className="sd-label">Status</p>
-            <span className={`badge ${sale.record_status === 'ACTIVE' ? 'badge-green' : 'badge-red'}`}>
+          <div className="detail-group">
+            <label>Status:</label>
+            <span
+              className={`badge ${sale.record_status === "ACTIVE" ? "badge-green" : "badge-red"}`}
+            >
               {sale.record_status}
             </span>
           </div>
-          {isAdmin && (
-            <div>
-              <p className="sd-label">Stamp</p>
-              <p className="sd-val mono" style={{ fontSize:11 }}>
-                {sale.stamp ? new Date(sale.stamp).toLocaleString() : '—'}
-              </p>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Line items */}
-      <div className="page-header" style={{ marginTop:22 }}>
-        <div>
-          <h3 className="page-title" style={{ fontSize:16 }}>Line Items</h3>
-          <p className="page-subtitle">{activeLines.length} active item{activeLines.length !== 1 ? 's' : ''}</p>
+      {/* Customer & Employee Info */}
+      <div className="detail-card">
+        <h3>Customer Information</h3>
+        <div className="detail-grid">
+          <div className="detail-group">
+            <label>Customer Code:</label>
+            <span>{sale.custno}</span>
+          </div>
+          <div className="detail-group">
+            <label>Customer Name:</label>
+            <span>{sale.custname}</span>
+          </div>
+          <div className="detail-group">
+            <label>Address:</label>
+            <span>{sale.custaddress || "—"}</span>
+          </div>
+          <div className="detail-group">
+            <label>Pay Term:</label>
+            <span>{sale.custpayterm || "—"}</span>
+          </div>
         </div>
-        {can('SD_ADD') && sale.record_status === 'ACTIVE' && (
-          <button className="btn btn-primary" onClick={() => setModal('add')}>
-            <Plus size={15} /> Add Line Item
-          </button>
-        )}
+
+        <h3>Employee Information</h3>
+        <div className="detail-grid">
+          <div className="detail-group">
+            <label>Employee Code:</label>
+            <span>{sale.empno}</span>
+          </div>
+          <div className="detail-group">
+            <label>Employee Name:</label>
+            <span>{sale.empname}</span>
+          </div>
+        </div>
       </div>
 
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Prod Code</th>
-              <th>Description</th>
-              <th>Qty</th>
-              <th>Unit Price</th>
-              <th>Row Total</th>
-              {isAdmin && <th>Status</th>}
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map(line => {
-              const up = line.unitPrice ?? line.unit_price ?? 0;
-              return (
-                <tr key={line.id} className={line.record_status === 'INACTIVE' ? 'row-inactive' : ''}>
-                  <td style={{ fontFamily:'var(--font-mono)', fontSize:12 }}>{line.prodCode}</td>
-                  <td>{line.description}</td>
-                  <td>{line.qty}</td>
-                  <td>${Number(up).toLocaleString()}</td>
-                  <td style={{ fontWeight:600 }}>${(line.qty * up).toLocaleString()}</td>
-                  {isAdmin && (
-                    <td>
-                      <span className={`badge ${line.record_status === 'ACTIVE' ? 'badge-green' : 'badge-red'}`}>
-                        {line.record_status}
-                      </span>
-                    </td>
-                  )}
-                  <td>
-                    <div style={{ display:'flex', gap:5 }}>
-                      {can('SD_EDIT') && line.record_status === 'ACTIVE' && (
-                        <button className="btn-icon" title="Edit"
-                          onClick={() => { setSelLine(line); setModal('edit'); }}>
-                          <Pencil size={14} />
-                        </button>
-                      )}
-                      {can('SD_DEL') && line.record_status === 'ACTIVE' && (
-                        <button className="btn-icon" title="Soft-delete" style={{ color:'var(--red)' }}
-                          onClick={() => { setSelLine(line); setModal('delete'); }}>
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                      {isAdmin && line.record_status === 'INACTIVE' && (
-                        <button className="btn-icon" title="Recover" style={{ color:'var(--green)' }}
-                          onClick={() => { setSelLine(line); setModal('recover'); }}>
-                          <RotateCcw size={14} />
-                        </button>
-                      )}
-                    </div>
+      {/* Line Items Table */}
+      <div className="detail-card">
+        <h3>Line Items ({totalItems} items)</h3>
+        <div className="table-wrap">
+          <table className="detail-table">
+            <thead>
+              <tr>
+                <th>Product Code</th>
+                <th>Description</th>
+                <th>Unit</th>
+                <th>Quantity</th>
+                <th>Unit Price</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lineItems.map((item) => (
+                <tr key={item.key}>
+                  <td>{item.prodcode}</td>
+                  <td>{item.description}</td>
+                  <td>{item.unit}</td>
+                  <td style={{ textAlign: "right" }}>{item.quantity}</td>
+                  <td style={{ textAlign: "right" }}>
+                    ${item.unitPrice.toLocaleString()}
+                  </td>
+                  <td style={{ textAlign: "right", fontWeight: 600 }}>
+                    ${item.total.toLocaleString()}
                   </td>
                 </tr>
-              );
-            })}
-            {lines.length === 0 && (
+              ))}
+              {lineItems.length === 0 && (
+                <tr>
+                  <td colSpan="6" style={{ textAlign: "center", padding: 32 }}>
+                    No line items found for this transaction.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            <tfoot>
               <tr>
-                <td colSpan={isAdmin ? 7 : 6}
-                  style={{ textAlign:'center', padding:32, color:'var(--text-muted)' }}>
-                  No line items found.
+                <td colSpan="5" style={{ textAlign: "right", fontWeight: 600 }}>
+                  Grand Total ({totalItems} items):
+                </td>
+                <td
+                  style={{
+                    fontWeight: 700,
+                    fontSize: 18,
+                    color: "var(--accent)",
+                  }}
+                >
+                  ${grandTotal.toLocaleString()}
                 </td>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {activeLines.length > 0 && (
-        <div className="sd-grand-total">
-          <span>Grand Total ({activeLines.length} active item{activeLines.length !== 1 ? 's' : ''})</span>
-          <span className="sd-gt-val">${grandTotal.toLocaleString()}</span>
+            </tfoot>
+          </table>
         </div>
-      )}
-
-      {modal === 'add'  && <AddLineItemModal transNo={transNo} onClose={closeModal} />}
-      {modal === 'edit' && selLine && <EditLineItemModal line={selLine} onClose={closeModal} />}
-      {modal === 'delete' && selLine && (
-        <ConfirmModal
-          title="Soft-Delete Line Item"
-          message={`Soft-delete line item for "${selLine.prodCode}"? It can be recovered from Deleted Items.`}
-          confirmLabel="Soft-Delete"
-          confirmClass="btn-danger"
-          onConfirm={handleSoftDeleteLine}
-          onCancel={closeModal}
-        />
-      )}
-      {modal === 'recover' && selLine && (
-        <ConfirmModal
-          title="Recover Line Item"
-          message={`Recover line item for "${selLine.prodCode}"?`}
-          confirmLabel="Recover"
-          confirmClass="btn-primary"
-          onConfirm={handleRecoverLine}
-          onCancel={closeModal}
-        />
-      )}
+      </div>
     </div>
   );
 }

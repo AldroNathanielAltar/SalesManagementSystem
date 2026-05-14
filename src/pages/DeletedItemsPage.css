@@ -1,62 +1,64 @@
+.btn-danger {
+  background: var(--red);
+  color: white;
+  border: none;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+.badge-danger {
+  background: #fee2e2;
+  color: #dc2626;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.di-table td,
+.di-table th {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.row-deleted {
+  background: #fef2f2;
+}
+
 .di-tabs {
   display: flex;
-  gap: 4px;
-  margin-bottom: 18px;
-  border-bottom: 2px solid var(--border);
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
   padding-bottom: 0;
 }
+
 .di-tab {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 9px 18px;
-  font-size: 13.5px;
-  font-weight: 500;
-  color: var(--text-muted);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
-  border: 1px solid transparent;
-  border-bottom: none;
-  margin-bottom: -2px;
-  transition: all var(--transition);
-  cursor: pointer;
+  gap: 8px;
+  padding: 10px 20px;
   background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
-.di-tab:hover { color: var(--text-primary); background: var(--bg-hover); }
+
 .di-tab.active {
   color: var(--accent);
-  background: #fff;
-  border-color: var(--border);
-  border-bottom-color: #fff;
+  border-bottom-color: var(--accent);
+}
+
+.di-count {
+  background: var(--accent-light);
+  color: var(--accent);
+  border-radius: 20px;
+  padding: 0px 6px;
+  font-size: 11px;
   font-weight: 600;
 }
-.di-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 99px;
-  background: var(--red-dim);
-  color: var(--red);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.row-deleted td { background: #fff8f8; }
-.row-deleted:hover td { background: #fff0f0; }
-
-.recover-btn { color: var(--green) !important; }
-.recover-btn:hover { background: var(--green) !important; color: #fff !important; border-color: var(--green) !important; }
-
-.di-blocked {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 60vh;
-  gap: 12px;
-  text-align: center;
-}
-.di-blocked h3 { font-size: 18px; font-weight: 700; color: var(--text-primary); }
-.di-blocked p  { font-size: 14px; color: var(--text-muted); max-width: 340px; }

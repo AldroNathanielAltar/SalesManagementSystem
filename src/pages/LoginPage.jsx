@@ -10,9 +10,9 @@ export default function LoginPage() {
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState(
     searchParams.get("error") === "not_activated"
-      ? "Your account is inactive. Please contact your administrator."
+      ? "Your account is pending activation. Please contact your administrator."
       : searchParams.get("registered") === "true"
-        ? "Account created! Please check your email to confirm, then sign in."
+        ? "Account created! An administrator must activate your account before you can log in."
         : "",
   );
   const [loading, setLoading] = useState(false);

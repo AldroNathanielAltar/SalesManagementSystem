@@ -1,229 +1,518 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import { useAuth } from './AuthContext';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+} from "react";
+import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "./AuthContext";
 
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
   const { currentUser } = useAuth();
-  const loadedRef = useRef(false);    // prevent reload on tab switch
-  const dbInfoRef = useRef(null);     // cache discovered table names
+  const loadedRef = useRef(false);
+  const dbInfoRef = useRef(null);
 
-  const [sales,         setSales]         = useState([]);
-  const [salesDetail,   setSalesDetail]   = useState([]);
-  const [customers,     setCustomers]     = useState([]);
-  const [employees,     setEmployees]     = useState([]);
-  const [products,      setProducts]      = useState([]);
-  const [priceHist,     setPriceHist]     = useState([]);
-  const [loading,       setLoading]       = useState(false);
+  // ── All tables matching your exact schema ────────────────────────────────
+  const [sales, setSales] = useState([]);
+  const [salesDetail, setSalesDetail] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [priceHist, setPriceHist] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [jobs, setJobs] = useState([]);
+  const [jobHistory, setJobHistory] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [rights, setRights] = useState([]);
+  const [modules, setModules] = useState([]);
+  const [monthlySalesTrend, setMonthlySalesTrend] = useState([]);
+  const [salesByCustomer, setSalesByCustomer] = useState([]);
+  const [topProductsSold, setTopProductsSold] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState([]);
+
+  // Role helpers
+  const isAdminUser = useCallback(() => {
+    return (
+      currentUser?.user_type === "ADMIN" ||
+      currentUser?.user_type === "SUPERADMIN"
+    );
+  }, [currentUser?.user_type]);
+
+  const isSuperAdmin = useCallback(() => {
+    return currentUser?.user_type === "SUPERADMIN";
+  }, [currentUser?.user_type]);
 
   useEffect(() => {
     if (!currentUser) {
-      // Only reset if we're actually logging out — not tab switching
-      // Tab switch doesn't change currentUser, so this won't fire
       loadedRef.current = false;
       dbInfoRef.current = null;
-      setSales([]); setSalesDetail([]);
-      setCustomers([]); setEmployees([]); setProducts([]); setPriceHist([]);
+      setSales([]);
+      setSalesDetail([]);
+      setCustomers([]);
+      setEmployees([]);
+      setProducts([]);
+      setPriceHist([]);
+      setDepartments([]);
+      setJobs([]);
+      setPayments([]);
       return;
     }
-
-    // Skip if already loaded — prevents tab-switch reload
     if (loadedRef.current) return;
-
     loadedRef.current = true;
-    discoverAndLoad();
+    loadAll();
   }, [currentUser?.userid]);
 
-  async function tryTable(names) {
-    for (const name of names) {
-      const { error } = await supabase.from(name).select('*').limit(1);
-      if (!error) return name;
-    }
-    return names[0];
-  }
-
-  async function discoverAndLoad() {
+  async function loadAll() {
     setLoading(true);
 
-    const [salesTbl, detailTbl, custTbl, empTbl, prodTbl, priceTbl] = await Promise.all([
-      tryTable(['sales']),
-      tryTable(['salesdetail', 'salesDetail', 'sales_detail']),
-      tryTable(['customer', 'customers']),
-      tryTable(['employee', 'employees']),
-      tryTable(['product', 'products']),
-      tryTable(['pricehist', 'priceHist', 'price_hist', 'pricelist']),
+    dbInfoRef.current = {
+      salesTbl: "sales",
+      detailTbl: "salesdetail",
+      custTbl: "customer",
+      empTbl: "employee",
+      prodTbl: "product",
+      priceTbl: "pricehist",
+      deptTbl: "department",
+      jobTbl: "job",
+      jobHistoryTbl: "jobhistory",
+      paymentTbl: "payment",
+      rightsTbl: "rights",
+      moduleTbl: "module",
+      monthlySalesTbl: "monthly_sales_trend",
+      salesByCustomerTbl: "sales_by_customer",
+      topProductsTbl: "top_products_sold",
+    };
+
+    await Promise.all([
+      loadSalesData(),
+      loadLookups(),
+      loadAdminData(),
+      loadReportViews(),
     ]);
 
-    const info = { salesTbl, detailTbl, custTbl, empTbl, prodTbl, priceTbl };
-    dbInfoRef.current = info;
-    console.log('[AppContext] Tables:', info);
-
-    await Promise.all([loadAllSales(info), loadLookups(info)]);
     setLoading(false);
   }
 
-  async function loadLookups({ custTbl, empTbl, prodTbl, priceTbl }) {
-    const [c, e, p, ph] = await Promise.all([
-      supabase.from(custTbl).select('*'),
-      supabase.from(empTbl).select('*'),
-      supabase.from(prodTbl).select('*'),
-      supabase.from(priceTbl).select('*'),
+  async function loadLookups() {
+    // ─── CUSTOMERS ──────────────────────────────────────────
+    const { data: customersData } = await supabase.from("customer").select("*");
+
+    if (customersData) {
+      setCustomers(
+        customersData.map((c) => ({
+          ...c,
+          custno: c.custno,
+          custname: c.custname,
+          address: c.address,
+          payterm: c.payterm,
+        })),
+      );
+    }
+
+    // ─── EMPLOYEES with department from jobhistory ──────────
+    const { data: employeesData } = await supabase.from("employee").select("*");
+
+    if (employeesData) {
+      // Get current department for each employee from jobhistory
+      const { data: jobHistoryData } = await supabase
+        .from("jobhistory")
+        .select("empno, deptcode, jobcode")
+        .order("effdate", { ascending: false });
+
+      const currentDeptMap = new Map();
+      if (jobHistoryData) {
+        jobHistoryData.forEach((jh) => {
+          if (!currentDeptMap.has(jh.empno)) {
+            currentDeptMap.set(jh.empno, jh.deptcode);
+          }
+        });
+      }
+
+      // Get department names
+      const { data: deptData } = await supabase.from("department").select("*");
+      const deptNameMap = new Map();
+      if (deptData) {
+        deptData.forEach((d) => deptNameMap.set(d.deptcode, d.deptname));
+      }
+
+      setEmployees(
+        employeesData.map((e) => ({
+          ...e,
+          empno: e.empno,
+          fullname: `${e.lastname}, ${e.firstname}`,
+          department_code: currentDeptMap.get(e.empno) || "—",
+          department_name: deptNameMap.get(currentDeptMap.get(e.empno)) || "—",
+        })),
+      );
+    }
+
+    // ─── PRODUCTS ───────────────────────────────────────────
+    const { data: productsData } = await supabase.from("product").select("*");
+
+    if (productsData) {
+      setProducts(
+        productsData.map((p) => ({
+          ...p,
+          prodcode: p.prodcode,
+          description: p.description,
+          unit: p.unit,
+        })),
+      );
+    }
+
+    // ─── PRICE HISTORY ──────────────────────────────────────
+    const { data: priceData } = await supabase
+      .from("pricehist")
+      .select("*")
+      .order("effdate", { ascending: false });
+
+    if (priceData) {
+      setPriceHist(
+        priceData.map((ph) => ({
+          ...ph,
+          prodcode: ph.prodcode,
+          effdate: ph.effdate,
+          unitprice: Number(ph.unitprice) || 0,
+        })),
+      );
+    }
+
+    // ─── DEPARTMENTS ────────────────────────────────────────
+    const { data: deptData } = await supabase.from("department").select("*");
+    if (deptData) setDepartments(deptData);
+
+    // ─── JOBS ───────────────────────────────────────────────
+    const { data: jobData } = await supabase.from("job").select("*");
+    if (jobData) setJobs(jobData);
+
+    // ─── JOB HISTORY ────────────────────────────────────────
+    const { data: jhData } = await supabase.from("jobhistory").select("*");
+    if (jhData) setJobHistory(jhData);
+
+    // ─── PAYMENTS ───────────────────────────────────────────
+    const { data: paymentData } = await supabase.from("payment").select("*");
+    if (paymentData) setPayments(paymentData);
+  }
+
+  async function loadSalesData() {
+    const isAdmin = isAdminUser();
+
+    // ─── SALES with joins ───────────────────────────────────
+    let salesQuery = supabase.from("sales").select(`
+        *,
+        customer:customer!sales_custno_fkey (*),
+        employee:employee!sales_empno_fkey (*)
+      `);
+
+    if (!isAdmin) {
+      salesQuery = salesQuery.eq("record_status", "ACTIVE");
+    }
+
+    const { data: salesData } = await salesQuery;
+
+    if (salesData) {
+      const normalizedSales = salesData.map((row) => ({
+        transno: row.transno,
+        salesdate: row.salesdate,
+        custno: row.custno,
+        custname: row.customer?.custname || row.custname,
+        custaddress: row.customer?.address,
+        custpayterm: row.customer?.payterm,
+        empno: row.empno,
+        empname: row.employee
+          ? `${row.employee.lastname}, ${row.employee.firstname}`
+          : "",
+        record_status: row.record_status,
+        stamp: row.stamp,
+      }));
+      setSales(normalizedSales);
+    }
+
+    // ─── SALES DETAIL with product join ─────────────────────
+    let detailQuery = supabase.from("salesdetail").select(`
+        *,
+        product:product!salesdetail_prodcode_fkey (*)
+      `);
+
+    if (!isAdmin) {
+      detailQuery = detailQuery.eq("record_status", "ACTIVE");
+    }
+
+    const { data: detailData } = await detailQuery;
+
+    if (detailData) {
+      const normalizedDetails = detailData.map((row) => ({
+        ...row,
+        transno: row.transno,
+        prodcode: row.prodcode,
+        description: row.product?.description,
+        unit: row.product?.unit,
+        quantity: Number(row.quantity) || 0,
+        record_status: row.record_status,
+      }));
+      setSalesDetail(normalizedDetails);
+    }
+  }
+
+  async function loadAdminData() {
+    const [rightsRes, modulesRes] = await Promise.allSettled([
+      supabase.from("rights").select("*"),
+      supabase.from("module").select("*"),
     ]);
-    if (c.data)  setCustomers(c.data);
-    if (e.data)  setEmployees(e.data);
-    if (p.data)  setProducts(p.data);
-    if (ph.data) setPriceHist(ph.data);
+    if (rightsRes.value?.data) setRights(rightsRes.value.data);
+    if (modulesRes.value?.data) setModules(modulesRes.value.data);
   }
 
-  async function loadAllSales({ salesTbl, detailTbl }) {
-    const isAdminUser = currentUser?.user_type === 'ADMIN' || currentUser?.user_type === 'SUPERADMIN';
+  async function loadReportViews() {
+    // ─── MONTHLY SALES TREND ────────────────────────────────
+    const { data: monthlyData } = await supabase
+      .from("monthly_sales_trend")
+      .select("*")
+      .order("salemonth", { ascending: false });
 
-    // Sales
-    const { data: sd } = await supabase.from(salesTbl).select('*');
-    if (sd) {
-      const norm = sd.map(normalizeRow);
-      setSales(isAdminUser ? norm : norm.filter(s => s.record_status === 'ACTIVE'));
+    if (monthlyData) {
+      setMonthlySalesTrend(
+        monthlyData.map((m) => ({
+          salemonth: m.salemonth,
+          totaltransactions: Number(m.totaltransactions) || 0,
+          totalrevenue: Number(m.totalrevenue) || 0,
+          avg_per_transaction:
+            m.totaltransactions > 0 ? m.totalrevenue / m.totaltransactions : 0,
+        })),
+      );
     }
 
-    // Sales detail
-    const { data: dd } = await supabase.from(detailTbl).select('*');
-    if (dd) {
-      const norm = dd.map(normalizeDetailRow);
-      setSalesDetail(isAdminUser ? norm : norm.filter(d => d.record_status === 'ACTIVE'));
+    // ─── SALES BY CUSTOMER ──────────────────────────────────
+    const { data: customerSalesData } = await supabase
+      .from("sales_by_customer")
+      .select("*")
+      .order("totalrevenue", { ascending: false });
+
+    if (customerSalesData) {
+      setSalesByCustomer(
+        customerSalesData.map((c) => ({
+          custno: c.custno,
+          custname: c.custname,
+          payterm: c.payterm,
+          totaltransactions: Number(c.totaltransactions) || 0,
+          totalrevenue: Number(c.totalrevenue) || 0,
+        })),
+      );
+    }
+
+    // ─── TOP PRODUCTS SOLD ──────────────────────────────────
+    const { data: topProductsData } = await supabase
+      .from("top_products_sold")
+      .select("*")
+      .order("totalrevenue", { ascending: false });
+
+    if (topProductsData) {
+      setTopProductsSold(
+        topProductsData.map((p) => ({
+          prodcode: p.prodcode,
+          description: p.description,
+          unit: p.unit,
+          totalquantity: Number(p.totalquantity) || 0,
+          latestprice: Number(p.latestprice) || 0,
+          totalrevenue: Number(p.totalrevenue) || 0,
+        })),
+      );
     }
   }
 
-  function normalizeRow(row) {
-    return {
-      ...row,
-      transNo:       row.transNo    || row.transno    || row.trans_no    || row.id        || '',
-      salesDate:     row.salesDate  || row.sale_date  || row.saledate    || row.date      || '',
-      custno:        row.custno     || row.cust_no    || row.custNo      || '',
-      custname:      row.custname   || row.cust_name  || row.custName    || '',
-      empno:         row.empno      || row.emp_no     || row.empNo       || '',
-      empname:       row.empname    || row.emp_name   || row.empName     || '',
-      record_status: row.record_status || 'ACTIVE',
-      stamp:         row.stamp || row.updated_at || '',
-    };
-  }
+  // ── getCurrentPrice for a product ───────────────────────────────────────
+  const getCurrentPrice = useCallback(
+    (prodcode) => {
+      const priceEntry = priceHist.find((ph) => ph.prodcode === prodcode);
+      if (!priceEntry) return null;
+      return {
+        prodcode: priceEntry.prodcode,
+        unitprice: Number(priceEntry.unitprice) || 0,
+        effdate: priceEntry.effdate,
+      };
+    },
+    [priceHist],
+  );
 
-  function normalizeDetailRow(row) {
-    return {
-      ...row,
-      transNo:       row.transNo    || row.transno    || row.trans_no    || '',
-      prodCode:      row.prodCode   || row.prod_code  || row.prodcode    || '',
-      description:   row.description || row.desc || row.product_name    || '',
-      qty:           row.qty        || row.quantity   || 0,
-      unitPrice:     row.unitPrice  || row.unit_price || row.price       || 0,
-      record_status: row.record_status || 'ACTIVE',
-    };
-  }
-
-  const getCurrentPrice = useCallback((prodCode) => {
-    const rows = priceHist
-      .filter(p => (p.prodCode || p.prod_code || p.prodcode) === prodCode)
-      .sort((a, b) => new Date(b.effDate || b.eff_date || 0) - new Date(a.effDate || a.eff_date || 0));
-    return rows[0] || null;
-  }, [priceHist]);
-
-  // Force reload (used by loadSales, loadSalesDetail)
   const reloadSales = useCallback(async () => {
-    if (dbInfoRef.current) await loadAllSales(dbInfoRef.current);
-  }, [currentUser?.user_type]);
-
-  // ── CRUD ───────────────────────────────────────────────────────────────────
-  const addSale = useCallback(async (data) => {
-    const tbl = dbInfoRef.current?.salesTbl || 'sales';
-    const { data: ins, error } = await supabase.from(tbl)
-      .insert([{ ...data, record_status: 'ACTIVE' }]).select().single();
-    if (error) throw error;
-    const norm = normalizeRow(ins);
-    setSales(prev => [norm, ...prev]);
-    return norm;
+    await loadSalesData();
   }, []);
 
-  const updateSale = useCallback(async (transNo, updates) => {
-    const tbl = dbInfoRef.current?.salesTbl || 'sales';
-    const { data: upd, error } = await supabase.from(tbl)
-      .update({ ...updates, stamp: new Date().toISOString() })
-      .eq('transNo', transNo).select().single();
-    if (error) throw error;
-    const norm = normalizeRow(upd);
-    setSales(prev => prev.map(s => s.transNo === transNo ? norm : s));
-    return norm;
+  const reloadAll = useCallback(async () => {
+    loadedRef.current = false;
+    await loadAll();
   }, []);
 
-  const softDeleteSale = useCallback(async (transNo) => {
-    const tbl = dbInfoRef.current?.salesTbl || 'sales';
-    const { error } = await supabase.from(tbl)
-      .update({ record_status: 'INACTIVE', stamp: new Date().toISOString() })
-      .eq('transNo', transNo);
-    if (error) throw error;
-    if (dbInfoRef.current) await loadAllSales(dbInfoRef.current);
-  }, [currentUser?.user_type]);
+  // ── SALES CRUD ──────────────────────────────────────────────────────────
+  const addSale = useCallback(
+    async (data) => {
+      const { data: ins, error } = await supabase
+        .from("sales")
+        .insert([
+          {
+            ...data,
+            record_status: "ACTIVE",
+            stamp: new Date().toISOString(),
+          },
+        ])
+        .select()
+        .single();
+      if (error) throw error;
+      await reloadSales();
+      return ins;
+    },
+    [reloadSales],
+  );
 
-  const recoverSale = useCallback(async (transNo) => {
-    const tbl = dbInfoRef.current?.salesTbl || 'sales';
-    const { error } = await supabase.from(tbl)
-      .update({ record_status: 'ACTIVE', stamp: new Date().toISOString() })
-      .eq('transNo', transNo);
-    if (error) throw error;
-    if (dbInfoRef.current) await loadAllSales(dbInfoRef.current);
-  }, [currentUser?.user_type]);
+  const updateSale = useCallback(
+    async (transno, updates) => {
+      const { data: upd, error } = await supabase
+        .from("sales")
+        .update({
+          ...updates,
+          stamp: new Date().toISOString(),
+        })
+        .eq("transno", transno)
+        .select()
+        .single();
+      if (error) throw error;
+      await reloadSales();
+      return upd;
+    },
+    [reloadSales],
+  );
 
-  const addDetailLine = useCallback(async (line) => {
-    const tbl = dbInfoRef.current?.detailTbl || 'salesdetail';
-    const { data: ins, error } = await supabase.from(tbl)
-      .insert([{ ...line, record_status: 'ACTIVE' }]).select().single();
-    if (error) throw error;
-    const norm = normalizeDetailRow(ins);
-    setSalesDetail(prev => [...prev, norm]);
-    return norm;
-  }, []);
+  const softDeleteSale = useCallback(
+    async (transno) => {
+      if (!isSuperAdmin()) {
+        throw new Error("Only superadmin can soft delete sales");
+      }
+      const { error } = await supabase
+        .from("sales")
+        .update({
+          record_status: "DELETED",
+          stamp: new Date().toISOString(),
+        })
+        .eq("transno", transno);
+      if (error) throw error;
+      await reloadSales();
+    },
+    [reloadSales, isSuperAdmin],
+  );
 
-  const updateDetailLine = useCallback(async (id, updates) => {
-    const tbl = dbInfoRef.current?.detailTbl || 'salesdetail';
-    const { data: upd, error } = await supabase.from(tbl)
-      .update(updates).eq('id', id).select().single();
-    if (error) throw error;
-    const norm = normalizeDetailRow(upd);
-    setSalesDetail(prev => prev.map(d => d.id === id ? norm : d));
-    return norm;
-  }, []);
+  // ── SALES DETAIL CRUD ───────────────────────────────────────────────────
+  const addDetailLine = useCallback(
+    async (line) => {
+      const { data: ins, error } = await supabase
+        .from("salesdetail")
+        .insert([
+          {
+            ...line,
+            record_status: "ACTIVE",
+            stamp: new Date().toISOString(),
+          },
+        ])
+        .select()
+        .single();
+      if (error) throw error;
+      await reloadSales();
+      return ins;
+    },
+    [reloadSales],
+  );
 
-  const softDeleteDetailLine = useCallback(async (id) => {
-    const tbl = dbInfoRef.current?.detailTbl || 'salesdetail';
-    const { error } = await supabase.from(tbl)
-      .update({ record_status: 'INACTIVE' }).eq('id', id);
-    if (error) throw error;
-    setSalesDetail(prev => prev.map(d => d.id === id ? { ...d, record_status: 'INACTIVE' } : d));
-  }, []);
+  const updateDetailLine = useCallback(
+    async (transno, prodcode, updates) => {
+      const { data: upd, error } = await supabase
+        .from("salesdetail")
+        .update(updates)
+        .eq("transno", transno)
+        .eq("prodcode", prodcode)
+        .select()
+        .single();
+      if (error) throw error;
+      await reloadSales();
+      return upd;
+    },
+    [reloadSales],
+  );
 
-  const recoverDetailLine = useCallback(async (id) => {
-    const tbl = dbInfoRef.current?.detailTbl || 'salesdetail';
-    const { error } = await supabase.from(tbl)
-      .update({ record_status: 'ACTIVE' }).eq('id', id);
-    if (error) throw error;
-    setSalesDetail(prev => prev.map(d => d.id === id ? { ...d, record_status: 'ACTIVE' } : d));
-  }, []);
+  const softDeleteDetailLine = useCallback(
+    async (transno, prodcode) => {
+      const { error } = await supabase
+        .from("salesdetail")
+        .update({ record_status: "DELETED" })
+        .eq("transno", transno)
+        .eq("prodcode", prodcode);
+      if (error) throw error;
+      await reloadSales();
+    },
+    [reloadSales],
+  );
 
-  const markRead    = useCallback((id) =>
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n)), []);
-  const markAllRead = useCallback(() =>
-    setNotifications(prev => prev.map(n => ({ ...n, read: true }))), []);
+  // ── Helper to calculate totals from sales and details ───────────────────
+  const getSaleTotal = useCallback(
+    (transno) => {
+      const details = salesDetail.filter((d) => d.transno === transno);
+      return details.reduce(
+        (sum, d) =>
+          sum + d.quantity * (getCurrentPrice(d.prodcode)?.unitprice || 0),
+        0,
+      );
+    },
+    [salesDetail, getCurrentPrice],
+  );
 
   return (
-    <AppContext.Provider value={{
-      loading,
-      sales,       loadSales: reloadSales,
-      salesDetail, loadSalesDetail: reloadSales,
-      addSale, updateSale, softDeleteSale, recoverSale,
-      addDetailLine, updateDetailLine, softDeleteDetailLine, recoverDetailLine,
-      customers, employees, products, priceHist, getCurrentPrice,
-      notifications, markRead, markAllRead,
-    }}>
+    <AppContext.Provider
+      value={{
+        loading,
+        // Main data
+        sales,
+        salesDetail,
+        customers,
+        employees,
+        products,
+        priceHist,
+        departments,
+        jobs,
+        jobHistory,
+        payments,
+        rights,
+        modules,
+        // Report data (from views)
+        monthlySalesTrend,
+        salesByCustomer,
+        topProductsSold,
+        // Methods
+        loadSales: reloadSales,
+        reloadAll,
+        addSale,
+        updateSale,
+        softDeleteSale,
+        addDetailLine,
+        updateDetailLine,
+        softDeleteDetailLine,
+        getCurrentPrice,
+        getSaleTotal,
+        // Role helpers
+        isAdmin: isAdminUser(),
+        isSuperAdmin: isSuperAdmin(),
+        // Notifications
+        notifications,
+        markRead: (id) =>
+          setNotifications((prev) =>
+            prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+          ),
+        markAllRead: () =>
+          setNotifications((prev) => prev.map((n) => ({ ...n, read: true }))),
+      }}
+    >
       {children}
     </AppContext.Provider>
   );
@@ -231,6 +520,6 @@ export function AppProvider({ children }) {
 
 export function useApp() {
   const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useApp must be used inside AppProvider');
+  if (!ctx) throw new Error("useApp must be used inside AppProvider");
   return ctx;
 }

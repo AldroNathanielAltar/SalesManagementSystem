@@ -8,30 +8,30 @@
 // Table: usermodule_rights
 // Columns: userid (text), rightid (varchar), right_value (int4)
 
-import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabaseClient'
-import { useAuth } from './AuthContext'
+import { createContext, useContext, useEffect, useState } from "react";
+import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "./AuthContext";
 
 // ---------------------------------------------------------------------------
 // The 13 right IDs — must match exactly what M3 seeded in the rights table
 // ---------------------------------------------------------------------------
 const DEFAULT_RIGHTS = {
-  SALES_VIEW:   0,
-  SALES_ADD:    0,
-  SALES_EDIT:   0,
-  SALES_DEL:    0,
-  SD_VIEW:      0,
-  SD_ADD:       0,
-  SD_EDIT:      0,
-  SD_DEL:       0,
-  CUST_LOOKUP:  0,
-  EMP_LOOKUP:   0,
-  PROD_LOOKUP:  0,
+  SALES_VIEW: 0,
+  SALES_ADD: 0,
+  SALES_EDIT: 0,
+  SALES_DEL: 0,
+  SD_VIEW: 0,
+  SD_ADD: 0,
+  SD_EDIT: 0,
+  SD_DEL: 0,
+  CUST_LOOKUP: 0,
+  EMP_LOOKUP: 0,
+  PROD_LOOKUP: 0,
   PRICE_LOOKUP: 0,
-  ADM_USER:     0,
-}
+  ADM_USER: 0,
+};
 
-const UserRightsContext = createContext(null)
+const UserRightsContext = createContext(null);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UserRightsProvider
@@ -39,52 +39,55 @@ const UserRightsContext = createContext(null)
 // Stores them as a flat map: { SALES_VIEW: 1, SALES_ADD: 0, ... }
 // ─────────────────────────────────────────────────────────────────────────────
 export function UserRightsProvider({ children }) {
-  const { currentUser } = useAuth()
+  const { currentUser } = useAuth();
 
-  const [rights, setRights]               = useState(DEFAULT_RIGHTS)
-  const [rightsLoading, setRightsLoading] = useState(false)
-  const [rightsError, setRightsError]     = useState('')
+  const [rights, setRights] = useState(DEFAULT_RIGHTS);
+  const [rightsLoading, setRightsLoading] = useState(false);
+  const [rightsError, setRightsError] = useState("");
 
   useEffect(() => {
     if (!currentUser?.userId) {
       // Logged out — reset to all-zero defaults
-      setRights(DEFAULT_RIGHTS)
-      setRightsError('')
-      return
+      setRights(DEFAULT_RIGHTS);
+      setRightsError("");
+      return;
     }
 
-    fetchRights(currentUser.userId)
-  }, [currentUser])
+    fetchRights(currentUser.userId);
+  }, [currentUser]);
 
   async function fetchRights(userId) {
-    setRightsLoading(true)
-    setRightsError('')
+    setRightsLoading(true);
+    setRightsError("");
 
     const { data, error } = await supabase
-      .from('usermodule_rights')        // lowercase — matches Supabase table name
-      .select('rightid, right_value')
-      .eq('userid', userId)             // lowercase — matches Supabase column name
+      .from("usermodule_rights") // lowercase — matches Supabase table name
+      .select("rightid, right_value")
+      .eq("userid", userId); // lowercase — matches Supabase column name
 
     if (error) {
-      console.error('[UserRightsContext] Failed to load rights:', error.message)
-      setRightsError('Failed to load user rights. Please refresh.')
-      setRightsLoading(false)
-      return
+      console.error(
+        "[UserRightsContext] Failed to load rights:",
+        error.message,
+      );
+      setRightsError("Failed to load user rights. Please refresh.");
+      setRightsLoading(false);
+      return;
     }
 
     // Build the rights map from the fetched rows.
     // Start from DEFAULT_RIGHTS (all zeros) so any missing right stays 0.
-    const rightsMap = { ...DEFAULT_RIGHTS }
+    const rightsMap = { ...DEFAULT_RIGHTS };
 
     data.forEach(({ rightid, right_value }) => {
-      const key = rightid?.toUpperCase()    // normalize casing just in case
+      const key = rightid?.toUpperCase(); // normalize casing just in case
       if (key in rightsMap) {
-        rightsMap[key] = right_value ?? 0   // treat NULL as 0
+        rightsMap[key] = right_value ?? 0; // treat NULL as 0
       }
-    })
+    });
 
-    setRights(rightsMap)
-    setRightsLoading(false)
+    setRights(rightsMap);
+    setRightsLoading(false);
   }
 
   // ---------------------------------------------------------------------------
@@ -92,14 +95,16 @@ export function UserRightsProvider({ children }) {
   // Usage: can('SALES_ADD') returns true if right_value === 1
   // ---------------------------------------------------------------------------
   function can(right) {
-    return rights[right] === 1
+    return rights[right] === 1;
   }
 
   return (
-    <UserRightsContext.Provider value={{ rights, can, rightsLoading, rightsError }}>
+    <UserRightsContext.Provider
+      value={{ rights, can, rightsLoading, rightsError }}
+    >
       {children}
     </UserRightsContext.Provider>
-  )
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -108,7 +113,8 @@ export function UserRightsProvider({ children }) {
 // Check a right: can('SALES_ADD') or rights.SALES_ADD === 1
 // ─────────────────────────────────────────────────────────────────────────────
 export function useRights() {
-  const ctx = useContext(UserRightsContext)
-  if (!ctx) throw new Error('useRights must be used inside <UserRightsProvider>')
-  return ctx
+  const ctx = useContext(UserRightsContext);
+  if (!ctx)
+    throw new Error("useRights must be used inside <UserRightsProvider>");
+  return ctx;
 }
