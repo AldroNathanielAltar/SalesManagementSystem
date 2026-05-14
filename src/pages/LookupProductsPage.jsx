@@ -6,5 +6,5 @@ export default function LookupProductsPage() {
         <p className="text-gray-400">Read-only lookup — Sprint 2 — M2</p>
       </div>
     </div>
-  )
+  );
 }

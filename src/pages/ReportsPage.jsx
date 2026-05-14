@@ -1,21 +1,4 @@
-/**
- * PR-02: feat/ui-reports
- * Sprint 3 M2 — 4 Report pages from Supabase views:
- *   1. SalesByEmployeePage  — sales_by_employee view
- *   2. SalesByCustomerPage  — sales_by_customer view
- *   3. TopProductsPage      — top_products_sold view
- *   4. MonthlySalesTrendPage — monthly_sales_trend view
- *
- * Each page:
- * - Fetches from Supabase view
- * - Loading skeleton
- * - Empty state message
- * - Error state
- * - Sortable table
- * - Bar chart (Recharts)
- * - Mobile responsive
- */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   BarChart,
   Bar,
@@ -25,7 +8,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  LineChart,
   Line,
   Legend,
 } from "recharts";
@@ -37,7 +19,6 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Loader2,
   AlertCircle,
   RefreshCw,
   Star,
@@ -47,7 +28,6 @@ import {
 import { supabase } from "../lib/supabaseClient";
 import "./ReportsPage.css";
 
-/* ── Shared tooltip style ── */
 const TT = {
   background: "#fff",
   border: "1px solid var(--border)",
@@ -74,21 +54,19 @@ function ReportSkeleton({ rows = 5 }) {
   );
 }
 
-/* ── Error state ── */
 function ReportError({ message, onRetry }) {
   return (
     <div className="rp-error">
       <AlertCircle size={36} style={{ color: "var(--red)", opacity: 0.7 }} />
       <h3>Failed to load report</h3>
       <p>{message}</p>
-      <button className="btn btn-secondary" onClick={onRetry}>
+      <button className="btn btn-primary" onClick={onRetry}>
         <RefreshCw size={14} /> Retry
       </button>
     </div>
   );
 }
 
-/* ── Empty state ── */
 function EmptyState({ icon: Icon, title, subtitle }) {
   return (
     <div className="rp-empty">
@@ -99,7 +77,6 @@ function EmptyState({ icon: Icon, title, subtitle }) {
   );
 }
 
-/* ── Sort helper ── */
 function useSortable(data, defaultKey, defaultDir = "desc") {
   const [sortKey, setSortKey] = useState(defaultKey);
   const [sortDir, setSortDir] = useState(defaultDir);
@@ -113,10 +90,10 @@ function useSortable(data, defaultKey, defaultDir = "desc") {
   }
 
   const sorted = [...data].sort((a, b) => {
-    const va = a[sortKey] ?? 0,
-      vb = b[sortKey] ?? 0;
-    const num = typeof va === "number";
-    const cmp = num ? va - vb : String(va).localeCompare(String(vb));
+    const va = a[sortKey] ?? 0;
+    const vb = b[sortKey] ?? 0;
+    const cmp =
+      typeof va === "number" ? va - vb : String(va).localeCompare(String(vb));
     return sortDir === "asc" ? cmp : -cmp;
   });
 
@@ -130,32 +107,142 @@ function useSortable(data, defaultKey, defaultDir = "desc") {
     );
   }
 
-  return { sorted, sortKey, sortDir, toggleSort, SortIcon };
+  return { sorted, toggleSort, SortIcon };
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   1. SALES BY EMPLOYEE
-══════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   1. SALES BY EMPLOYEE - FIXED with Revenue
+══════════════════════════════════════════════════════════ */
 export function SalesByEmployeePage() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { sorted, toggleSort, SortIcon } = useSortable(data, "total_revenue");
+  const mountedRef = useRef(true);
 
-  const load = useCallback(async () => {
+  const loadData = useCallback(async () => {
+    if (!mountedRef.current) return;
     setLoading(true);
     setError("");
-    const { data: rows, error: err } = await supabase
-      .from("sales_by_employee")
-      .select("*");
-    if (err) setError(err.message);
-    else setData(rows || []);
-    setLoading(false);
+
+    try {
+      // Get all active sales
+      const { data: salesData, error: salesError } = await supabase
+        .from("sales")
+        .select(
+          `
+          transno,
+          empno,
+          record_status
+        `,
+        )
+        .eq("record_status", "ACTIVE");
+
+      if (salesError) throw salesError;
+
+      // Get all sales details with quantities
+      const { data: detailsData, error: detailsError } = await supabase
+        .from("salesdetail")
+        .select(
+          `
+          transno,
+          prodcode,
+          quantity
+        `,
+        )
+        .eq("record_status", "ACTIVE");
+
+      if (detailsError) throw detailsError;
+
+      // Get all prices from pricehist (latest price per product)
+      const { data: priceData, error: priceError } = await supabase
+        .from("pricehist")
+        .select("prodcode, unitprice, effdate")
+        .order("effdate", { ascending: false });
+
+      if (priceError) throw priceError;
+
+      // Get latest price per product
+      const latestPriceMap = new Map();
+      priceData?.forEach((price) => {
+        if (!latestPriceMap.has(price.prodcode)) {
+          latestPriceMap.set(price.prodcode, Number(price.unitprice) || 0);
+        }
+      });
+
+      // Calculate revenue per transaction
+      const transactionRevenue = new Map();
+      detailsData?.forEach((detail) => {
+        const transno = detail.transno;
+        const quantity = Number(detail.quantity) || 0;
+        const price = latestPriceMap.get(detail.prodcode) || 0;
+        const revenue = quantity * price;
+
+        transactionRevenue.set(
+          transno,
+          (transactionRevenue.get(transno) || 0) + revenue,
+        );
+      });
+
+      // Get employee names
+      const { data: employeesData } = await supabase
+        .from("employee")
+        .select("empno, firstname, lastname");
+
+      const employeeNameMap = new Map();
+      employeesData?.forEach((emp) => {
+        employeeNameMap.set(emp.empno, `${emp.lastname}, ${emp.firstname}`);
+      });
+
+      // Aggregate by employee
+      const employeeMap = new Map();
+      salesData?.forEach((sale) => {
+        const empno = sale.empno;
+        if (!empno) return;
+
+        if (!employeeMap.has(empno)) {
+          employeeMap.set(empno, {
+            empno: empno,
+            empname: employeeNameMap.get(empno) || empno,
+            total_transactions: 0,
+            total_revenue: 0,
+          });
+        }
+
+        const record = employeeMap.get(empno);
+        record.total_transactions += 1;
+        record.total_revenue += transactionRevenue.get(sale.transno) || 0;
+      });
+
+      if (mountedRef.current) {
+        setData(
+          Array.from(employeeMap.values()).filter(
+            (e) => e.total_transactions > 0,
+          ),
+        );
+      }
+    } catch (err) {
+      console.error("Sales by employee error:", err);
+      if (mountedRef.current) setError(err.message || "Failed to load");
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    mountedRef.current = true;
+    loadData();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [loadData]);
+
+  const { sorted, toggleSort, SortIcon } = useSortable(data, "total_revenue");
+
+  const totalRevenue = data.reduce((sum, row) => sum + row.total_revenue, 0);
+  const totalTransactions = data.reduce(
+    (sum, row) => sum + row.total_transactions,
+    0,
+  );
 
   return (
     <div className="fade-in rp-page">
@@ -166,7 +253,11 @@ export function SalesByEmployeePage() {
             Revenue and transaction count per employee
           </p>
         </div>
-        <button className="btn btn-secondary" onClick={load} disabled={loading}>
+        <button
+          className="btn btn-secondary"
+          onClick={loadData}
+          disabled={loading}
+        >
           <RefreshCw
             size={14}
             style={loading ? { animation: "spin .7s linear infinite" } : {}}
@@ -175,8 +266,35 @@ export function SalesByEmployeePage() {
         </button>
       </div>
 
+      {/* Summary KPIs */}
+      {!loading && !error && data.length > 0 && (
+        <div className="rp-kpi-row">
+          <div className="rp-kpi">
+            <p className="rp-kpi-val">{data.length}</p>
+            <p className="rp-kpi-label">Active Employees</p>
+          </div>
+          <div className="rp-kpi">
+            <p className="rp-kpi-val">{totalTransactions}</p>
+            <p className="rp-kpi-label">Total Transactions</p>
+          </div>
+          <div className="rp-kpi">
+            <p className="rp-kpi-val">${totalRevenue.toLocaleString()}</p>
+            <p className="rp-kpi-label">Total Revenue</p>
+          </div>
+          <div className="rp-kpi">
+            <p className="rp-kpi-val">
+              $
+              {totalTransactions > 0
+                ? (totalRevenue / totalTransactions).toFixed(2)
+                : "0"}
+            </p>
+            <p className="rp-kpi-label">Avg. Transaction Value</p>
+          </div>
+        </div>
+      )}
+
       {loading && <ReportSkeleton />}
-      {!loading && error && <ReportError message={error} onRetry={load} />}
+      {!loading && error && <ReportError message={error} onRetry={loadData} />}
       {!loading && !error && data.length === 0 && (
         <EmptyState
           icon={Users}
@@ -184,13 +302,11 @@ export function SalesByEmployeePage() {
           subtitle="No transactions found. Create some sales to see employee performance."
         />
       )}
-
       {!loading && !error && data.length > 0 && (
         <>
-          {/* Bar chart */}
           <div className="card rp-chart-card">
-            <p className="rp-chart-title">Revenue by Employee</p>
-            <ResponsiveContainer width="100%" height={240}>
+            <p className="rp-chart-title">Revenue by Employee (Top 10)</p>
+            <ResponsiveContainer width="100%" height={260}>
               <BarChart data={sorted.slice(0, 10)} barSize={32}>
                 <CartesianGrid
                   strokeDasharray="3 3"
@@ -211,7 +327,10 @@ export function SalesByEmployeePage() {
                 />
                 <Tooltip
                   contentStyle={TT}
-                  formatter={(v) => [`$${Number(v).toLocaleString()}`]}
+                  formatter={(v) => [
+                    `$${Number(v).toLocaleString()}`,
+                    "Revenue",
+                  ]}
                 />
                 <Bar
                   dataKey="total_revenue"
@@ -225,10 +344,8 @@ export function SalesByEmployeePage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-
-          {/* Table */}
           <div className="table-wrap" style={{ marginTop: 16 }}>
-            <table>
+            <table className="rp-table">
               <thead>
                 <tr>
                   <th>#</th>
@@ -260,14 +377,14 @@ export function SalesByEmployeePage() {
               </thead>
               <tbody>
                 {sorted.map((row, i) => (
-                  <tr key={row.empno || i}>
+                  <tr key={row.empno}>
                     <td style={{ color: "var(--text-muted)", fontWeight: 700 }}>
                       #{i + 1}
                     </td>
-                    <td>{row.empname || row.empno || "—"}</td>
+                    <td>{row.empname}</td>
                     <td>{row.total_transactions ?? 0}</td>
-                    <td style={{ fontWeight: 600 }}>
-                      ${Number(row.total_revenue ?? 0).toLocaleString()}
+                    <td style={{ fontWeight: 600, color: "var(--accent)" }}>
+                      ${(row.total_revenue ?? 0).toLocaleString()}
                     </td>
                   </tr>
                 ))}
@@ -280,36 +397,123 @@ export function SalesByEmployeePage() {
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   2. SALES BY CUSTOMER
-══════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   2. SALES BY CUSTOMER - FIXED with Revenue
+══════════════════════════════════════════════════════════ */
 export function SalesByCustomerPage() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { sorted, toggleSort, SortIcon } = useSortable(data, "total_revenue");
+  const mountedRef = useRef(true);
 
-  const load = useCallback(async () => {
+  const loadData = useCallback(async () => {
+    if (!mountedRef.current) return;
     setLoading(true);
     setError("");
-    const { data: rows, error: err } = await supabase
-      .from("sales_by_customer")
-      .select("*");
-    if (err) setError(err.message);
-    else setData(rows || []);
-    setLoading(false);
+
+    try {
+      // Try to use sales_by_customer view first
+      const { data: viewData, error: viewError } = await supabase
+        .from("sales_by_customer")
+        .select("*")
+        .order("totalrevenue", { ascending: false });
+
+      if (!viewError && viewData && viewData.length > 0) {
+        setData(
+          viewData.map((c) => ({
+            custno: c.custno,
+            custname: c.custname,
+            payterm: c.payterm,
+            total_transactions: Number(c.totaltransactions) || 0,
+            total_revenue: Number(c.totalrevenue) || 0,
+          })),
+        );
+      } else {
+        // Fallback: calculate from raw data
+        const { data: salesData, error: salesError } = await supabase
+          .from("sales")
+          .select("custno, transno")
+          .eq("record_status", "ACTIVE");
+
+        if (salesError) throw salesError;
+
+        const { data: detailsData } = await supabase
+          .from("salesdetail")
+          .select("transno, prodcode, quantity")
+          .eq("record_status", "ACTIVE");
+
+        const { data: priceData } = await supabase
+          .from("pricehist")
+          .select("prodcode, unitprice")
+          .order("effdate", { ascending: false });
+
+        const latestPriceMap = new Map();
+        priceData?.forEach((p) => {
+          if (!latestPriceMap.has(p.prodcode)) {
+            latestPriceMap.set(p.prodcode, Number(p.unitprice) || 0);
+          }
+        });
+
+        const transRevenue = new Map();
+        detailsData?.forEach((d) => {
+          const rev = (d.quantity || 0) * (latestPriceMap.get(d.prodcode) || 0);
+          transRevenue.set(d.transno, (transRevenue.get(d.transno) || 0) + rev);
+        });
+
+        const { data: customersData } = await supabase
+          .from("customer")
+          .select("custno, custname, payterm");
+
+        const customerMap = new Map();
+        customersData?.forEach((c) => {
+          customerMap.set(c.custno, {
+            custname: c.custname,
+            payterm: c.payterm,
+          });
+        });
+
+        const aggMap = new Map();
+        salesData?.forEach((sale) => {
+          const custno = sale.custno;
+          if (!custno) return;
+
+          if (!aggMap.has(custno)) {
+            const custInfo = customerMap.get(custno) || {};
+            aggMap.set(custno, {
+              custno: custno,
+              custname: custInfo.custname || custno,
+              payterm: custInfo.payterm || "—",
+              total_transactions: 0,
+              total_revenue: 0,
+            });
+          }
+          const record = aggMap.get(custno);
+          record.total_transactions += 1;
+          record.total_revenue += transRevenue.get(sale.transno) || 0;
+        });
+
+        setData(
+          Array.from(aggMap.values()).filter((c) => c.total_transactions > 0),
+        );
+      }
+    } catch (err) {
+      console.error("Sales by customer error:", err);
+      if (mountedRef.current) setError(err.message || "Failed to load");
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    mountedRef.current = true;
+    loadData();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [loadData]);
 
-  const topCustomer =
-    data.length > 0
-      ? [...data].sort(
-          (a, b) => (b.total_revenue ?? 0) - (a.total_revenue ?? 0),
-        )[0]
-      : null;
+  const { sorted, toggleSort, SortIcon } = useSortable(data, "total_revenue");
+  const topCustomer = data.length > 0 ? sorted[0] : null;
 
   return (
     <div className="fade-in rp-page">
@@ -320,7 +524,11 @@ export function SalesByCustomerPage() {
             Total spend and transaction count per customer
           </p>
         </div>
-        <button className="btn btn-secondary" onClick={load} disabled={loading}>
+        <button
+          className="btn btn-secondary"
+          onClick={loadData}
+          disabled={loading}
+        >
           <RefreshCw
             size={14}
             style={loading ? { animation: "spin .7s linear infinite" } : {}}
@@ -329,7 +537,6 @@ export function SalesByCustomerPage() {
         </button>
       </div>
 
-      {/* Top customer highlight */}
       {!loading && !error && topCustomer && (
         <div className="rp-top-banner">
           <Star size={16} style={{ color: "var(--amber)", flexShrink: 0 }} />
@@ -339,27 +546,25 @@ export function SalesByCustomerPage() {
             <strong>
               ${Number(topCustomer.total_revenue ?? 0).toLocaleString()}
             </strong>{" "}
-            total spend across {topCustomer.total_transactions} transaction
-            {topCustomer.total_transactions !== 1 ? "s" : ""}
+            total spend
           </span>
         </div>
       )}
 
       {loading && <ReportSkeleton />}
-      {!loading && error && <ReportError message={error} onRetry={load} />}
+      {!loading && error && <ReportError message={error} onRetry={loadData} />}
       {!loading && !error && data.length === 0 && (
         <EmptyState
           icon={ShoppingBag}
           title="No data yet"
-          subtitle="No transactions found. Create some sales to see customer spend."
+          subtitle="No transactions found."
         />
       )}
-
       {!loading && !error && data.length > 0 && (
         <>
           <div className="card rp-chart-card">
             <p className="rp-chart-title">Revenue by Customer (Top 10)</p>
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={260}>
               <BarChart data={sorted.slice(0, 10)} barSize={32}>
                 <CartesianGrid
                   strokeDasharray="3 3"
@@ -372,7 +577,7 @@ export function SalesByCustomerPage() {
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v) =>
-                    v?.length > 12 ? v.slice(0, 12) + "…" : v
+                    v?.length > 15 ? v.slice(0, 15) + "…" : v
                   }
                 />
                 <YAxis
@@ -388,6 +593,7 @@ export function SalesByCustomerPage() {
                 <Bar
                   dataKey="total_revenue"
                   name="Revenue"
+                  fill="#16a34a"
                   radius={[4, 4, 0, 0]}
                 >
                   {sorted.slice(0, 10).map((_, i) => (
@@ -397,9 +603,8 @@ export function SalesByCustomerPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-
           <div className="table-wrap" style={{ marginTop: 16 }}>
-            <table>
+            <table className="rp-table">
               <thead>
                 <tr>
                   <th>#</th>
@@ -431,10 +636,7 @@ export function SalesByCustomerPage() {
               </thead>
               <tbody>
                 {sorted.map((row, i) => (
-                  <tr
-                    key={row.custno || i}
-                    className={i === 0 ? "rp-top-row" : ""}
-                  >
+                  <tr key={row.custno} className={i === 0 ? "rp-top-row" : ""}>
                     <td style={{ color: "var(--text-muted)", fontWeight: 700 }}>
                       {i === 0
                         ? "🥇"
@@ -445,12 +647,12 @@ export function SalesByCustomerPage() {
                             : `#${i + 1}`}
                     </td>
                     <td>
-                      {row.custname || row.custno || "—"}
+                      {row.custname}
                       {i === 0 && <span className="rp-top-tag">Top</span>}
                     </td>
                     <td>{row.total_transactions ?? 0}</td>
-                    <td style={{ fontWeight: 600 }}>
-                      ${Number(row.total_revenue ?? 0).toLocaleString()}
+                    <td style={{ fontWeight: 600, color: "var(--accent)" }}>
+                      ${(row.total_revenue ?? 0).toLocaleString()}
                     </td>
                   </tr>
                 ))}
@@ -463,30 +665,90 @@ export function SalesByCustomerPage() {
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════
    3. TOP PRODUCTS
-══════════════════════════════════════════════════════════════════ */
+══════════════════════════════════════════════════════════ */
 export function TopProductsPage() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { sorted, toggleSort, SortIcon } = useSortable(data, "total_revenue");
+  const mountedRef = useRef(true);
 
-  const load = useCallback(async () => {
+  const loadData = useCallback(async () => {
+    if (!mountedRef.current) return;
     setLoading(true);
     setError("");
-    const { data: rows, error: err } = await supabase
-      .from("top_products_sold")
-      .select("*");
-    if (err) setError(err.message);
-    else setData(rows || []);
-    setLoading(false);
+
+    try {
+      // Try to use top_products_sold view first
+      const { data: viewData, error: viewError } = await supabase
+        .from("top_products_sold")
+        .select("*")
+        .order("totalrevenue", { ascending: false });
+
+      if (!viewError && viewData && viewData.length > 0) {
+        setData(
+          viewData.map((p) => ({
+            prodcode: p.prodcode,
+            description: p.description,
+            total_qty_sold: Number(p.totalquantity) || 0,
+            total_revenue: Number(p.totalrevenue) || 0,
+          })),
+        );
+      } else {
+        // Fallback: aggregate from salesdetail
+        const { data: detailsData, error: detailsError } = await supabase
+          .from("salesdetail")
+          .select("prodcode, quantity")
+          .eq("record_status", "ACTIVE");
+
+        if (detailsError) throw detailsError;
+
+        const { data: productsDataLookup } = await supabase
+          .from("product")
+          .select("prodcode, description");
+
+        const productDescMap = new Map();
+        productsDataLookup?.forEach((p) => {
+          productDescMap.set(p.prodcode, p.description);
+        });
+
+        const aggMap = new Map();
+        detailsData?.forEach((detail) => {
+          const prodcode = detail.prodcode;
+          if (!prodcode) return;
+
+          if (!aggMap.has(prodcode)) {
+            aggMap.set(prodcode, {
+              prodcode: prodcode,
+              description: productDescMap.get(prodcode) || prodcode,
+              total_qty_sold: 0,
+              total_revenue: 0,
+            });
+          }
+          const record = aggMap.get(prodcode);
+          record.total_qty_sold += Number(detail.quantity) || 0;
+        });
+
+        setData(Array.from(aggMap.values()));
+      }
+    } catch (err) {
+      console.error("Top products error:", err);
+      if (mountedRef.current) setError(err.message || "Failed to load");
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    mountedRef.current = true;
+    loadData();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [loadData]);
 
+  const { sorted, toggleSort, SortIcon } = useSortable(data, "total_qty_sold");
   const COLORS = [
     "#7c3aed",
     "#2563eb",
@@ -503,192 +765,179 @@ export function TopProductsPage() {
       <div className="page-header">
         <div>
           <h2 className="page-title">Top Products Sold</h2>
-          <p className="page-subtitle">Products ranked by total revenue</p>
+          <p className="page-subtitle">Products ranked by quantity sold</p>
         </div>
-        <button className="btn btn-secondary" onClick={load} disabled={loading}>
+        <button
+          className="btn btn-secondary"
+          onClick={loadData}
+          disabled={loading}
+        >
           <RefreshCw
             size={14}
             style={loading ? { animation: "spin .7s linear infinite" } : {}}
-          />
+          />{" "}
           Refresh
         </button>
       </div>
 
       {loading && <ReportSkeleton />}
-      {!loading && error && <ReportError message={error} onRetry={load} />}
+      {!loading && error && <ReportError message={error} onRetry={loadData} />}
       {!loading && !error && data.length === 0 && (
         <EmptyState
           icon={Package}
           title="No data yet"
-          subtitle="No sales detail records found. Add line items to sales to see product rankings."
+          subtitle="Add line items to sales to see product rankings."
         />
       )}
-
       {!loading && !error && data.length > 0 && (
-        <>
-          <div className="card rp-chart-card">
-            <p className="rp-chart-title">Top Products by Revenue</p>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart
-                data={sorted.slice(0, 10)}
-                layout="vertical"
-                barSize={20}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--border)"
-                  horizontal={false}
-                />
-                <XAxis
-                  type="number"
-                  tick={{ fill: "var(--text-muted)", fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="description"
-                  width={140}
-                  tick={{ fill: "var(--text-secondary)", fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v) =>
-                    v?.length > 18 ? v.slice(0, 18) + "…" : v
-                  }
-                />
-                <Tooltip
-                  contentStyle={TT}
-                  formatter={(v) => [`$${Number(v).toLocaleString()}`]}
-                />
-                <Bar
-                  dataKey="total_revenue"
-                  name="Revenue"
-                  radius={[0, 4, 4, 0]}
-                >
-                  {sorted.slice(0, 10).map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="table-wrap" style={{ marginTop: 16 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>
-                    <button
-                      className="rp-sort-btn"
-                      onClick={() => toggleSort("description")}
+        <div className="table-wrap" style={{ marginTop: 16 }}>
+          <table className="rp-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>
+                  <button
+                    className="rp-sort-btn"
+                    onClick={() => toggleSort("description")}
+                  >
+                    Product <SortIcon col="description" />
+                  </button>
+                </th>
+                <th>
+                  <button
+                    className="rp-sort-btn"
+                    onClick={() => toggleSort("total_qty_sold")}
+                  >
+                    Qty Sold <SortIcon col="total_qty_sold" />
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.slice(0, 20).map((row, i) => (
+                <tr key={row.prodcode}>
+                  <td>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 24,
+                        height: 24,
+                        borderRadius: 6,
+                        background: COLORS[i % COLORS.length] + "22",
+                        color: COLORS[i % COLORS.length],
+                        fontSize: 11,
+                        fontWeight: 700,
+                      }}
                     >
-                      Product <SortIcon col="description" />
-                    </button>
-                  </th>
-                  <th>
-                    <button
-                      className="rp-sort-btn"
-                      onClick={() => toggleSort("total_qty_sold")}
-                    >
-                      Qty Sold <SortIcon col="total_qty_sold" />
-                    </button>
-                  </th>
-                  <th>
-                    <button
-                      className="rp-sort-btn"
-                      onClick={() => toggleSort("total_revenue")}
-                    >
-                      Revenue <SortIcon col="total_revenue" />
-                    </button>
-                  </th>
+                      {i + 1}
+                    </span>
+                  </td>
+                  <td>{row.description || row.prodcode}</td>
+                  <td>{row.total_qty_sold ?? 0}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {sorted.map((row, i) => (
-                  <tr key={row.prodCode || i}>
-                    <td>
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: 24,
-                          height: 24,
-                          borderRadius: 6,
-                          background: COLORS[i % COLORS.length] + "22",
-                          color: COLORS[i % COLORS.length],
-                          fontSize: 11,
-                          fontWeight: 700,
-                        }}
-                      >
-                        {i + 1}
-                      </span>
-                    </td>
-                    <td>{row.description || row.prodCode || "—"}</td>
-                    <td>{row.total_qty_sold ?? 0}</td>
-                    <td style={{ fontWeight: 600 }}>
-                      ${Number(row.total_revenue ?? 0).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════
    4. MONTHLY SALES TREND
-══════════════════════════════════════════════════════════════════ */
+══════════════════════════════════════════════════════════ */
 export function MonthlySalesTrendPage() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [yearFilter, setYearFilter] = useState("");
+  const mountedRef = useRef(true);
 
-  const load = useCallback(async () => {
+  const loadData = useCallback(async () => {
+    if (!mountedRef.current) return;
     setLoading(true);
     setError("");
-    const { data: rows, error: err } = await supabase
-      .from("monthly_sales_trend")
-      .select("*")
-      .order("sale_month", { ascending: true });
-    if (err) setError(err.message);
-    else setData(rows || []);
-    setLoading(false);
+
+    try {
+      // Try to use monthly_sales_trend view first
+      const { data: viewData, error: viewError } = await supabase
+        .from("monthly_sales_trend")
+        .select("*")
+        .order("salemonth", { ascending: false });
+
+      if (!viewError && viewData && viewData.length > 0) {
+        setData(
+          viewData.map((m) => ({
+            salemonth: m.salemonth,
+            total_transactions: Number(m.totaltransactions) || 0,
+            total_revenue: Number(m.totalrevenue) || 0,
+          })),
+        );
+      } else {
+        // Fallback: aggregate from sales table by month
+        const { data: salesRaw, error: salesError } = await supabase
+          .from("sales")
+          .select("salesdate")
+          .eq("record_status", "ACTIVE");
+
+        if (salesError) throw salesError;
+
+        const monthMap = new Map();
+        salesRaw?.forEach((sale) => {
+          if (!sale.salesdate) return;
+
+          const date = new Date(sale.salesdate);
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+          const displayMonth = date.toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+          });
+
+          if (!monthMap.has(monthKey)) {
+            monthMap.set(monthKey, {
+              salemonth: displayMonth,
+              monthKey: monthKey,
+              total_transactions: 0,
+              total_revenue: 0,
+            });
+          }
+          const record = monthMap.get(monthKey);
+          record.total_transactions += 1;
+        });
+
+        setData(
+          Array.from(monthMap.values()).sort((a, b) =>
+            b.monthKey.localeCompare(a.monthKey),
+          ),
+        );
+      }
+    } catch (err) {
+      console.error("Monthly sales trend error:", err);
+      if (mountedRef.current) setError(err.message || "Failed to load");
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    mountedRef.current = true;
+    loadData();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [loadData]);
 
-  /* Year filter */
   const years = [
-    ...new Set(data.map((r) => r.sale_month?.slice(0, 4)).filter(Boolean)),
+    ...new Set(data.map((r) => r.salemonth?.slice(-4)).filter(Boolean)),
   ].sort();
-
   const filtered = yearFilter
-    ? data.filter((r) => r.sale_month?.startsWith(yearFilter))
+    ? data.filter((r) => r.salemonth?.includes(yearFilter))
     : data;
-
-  const chartData = filtered.map((r) => ({
-    ...r,
-    label: r.sale_month || "—",
-    revenue: Number(r.total_revenue ?? 0),
-    orders: Number(r.transaction_count ?? 0),
-  }));
-
-  const totalRev = filtered.reduce(
-    (s, r) => s + Number(r.total_revenue ?? 0),
-    0,
-  );
-  const totalOrders = filtered.reduce(
-    (s, r) => s + Number(r.transaction_count ?? 0),
+  const totalTransactions = filtered.reduce(
+    (s, r) => s + r.total_transactions,
     0,
   );
 
@@ -697,9 +946,7 @@ export function MonthlySalesTrendPage() {
       <div className="page-header">
         <div>
           <h2 className="page-title">Monthly Sales Trend</h2>
-          <p className="page-subtitle">
-            Revenue and transaction count by month
-          </p>
+          <p className="page-subtitle">Transaction count by month</p>
         </div>
         <div className="page-actions">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -718,40 +965,29 @@ export function MonthlySalesTrendPage() {
               ))}
             </select>
             {yearFilter && (
-              <button
-                className="btn-icon"
-                onClick={() => setYearFilter("")}
-                title="Clear filter"
-              >
+              <button className="btn-icon" onClick={() => setYearFilter("")}>
                 <X size={13} />
               </button>
             )}
           </div>
           <button
             className="btn btn-secondary"
-            onClick={load}
+            onClick={loadData}
             disabled={loading}
           >
             <RefreshCw
               size={14}
               style={loading ? { animation: "spin .7s linear infinite" } : {}}
-            />
+            />{" "}
             Refresh
           </button>
         </div>
       </div>
 
-      {/* KPIs */}
       {!loading && !error && filtered.length > 0 && (
         <div className="rp-kpi-row">
           <div className="rp-kpi">
-            <p className="rp-kpi-val">${totalRev.toLocaleString()}</p>
-            <p className="rp-kpi-label">
-              Total Revenue{yearFilter ? ` (${yearFilter})` : ""}
-            </p>
-          </div>
-          <div className="rp-kpi">
-            <p className="rp-kpi-val">{totalOrders}</p>
+            <p className="rp-kpi-val">{totalTransactions}</p>
             <p className="rp-kpi-label">Total Transactions</p>
           </div>
           <div className="rp-kpi">
@@ -760,15 +996,17 @@ export function MonthlySalesTrendPage() {
           </div>
           <div className="rp-kpi">
             <p className="rp-kpi-val">
-              ${totalOrders > 0 ? (totalRev / totalOrders).toFixed(0) : "0"}
+              {filtered.length > 0
+                ? (totalTransactions / filtered.length).toFixed(1)
+                : "0"}
             </p>
-            <p className="rp-kpi-label">Avg. Order Value</p>
+            <p className="rp-kpi-label">Avg. Monthly Transactions</p>
           </div>
         </div>
       )}
 
       {loading && <ReportSkeleton />}
-      {!loading && error && <ReportError message={error} onRetry={load} />}
+      {!loading && error && <ReportError message={error} onRetry={loadData} />}
       {!loading && !error && filtered.length === 0 && (
         <EmptyState
           icon={TrendingUp}
@@ -780,98 +1018,58 @@ export function MonthlySalesTrendPage() {
           }
         />
       )}
-
       {!loading && !error && filtered.length > 0 && (
         <>
-          {/* Dual-axis bar + line chart */}
           <div className="card rp-chart-card">
-            <p className="rp-chart-title">Revenue & Transactions by Month</p>
+            <p className="rp-chart-title">Transactions by Month</p>
             <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={chartData} barSize={28}>
+              <BarChart data={filtered} barSize={40}>
                 <CartesianGrid
                   strokeDasharray="3 3"
                   stroke="var(--border)"
                   vertical={false}
                 />
                 <XAxis
-                  dataKey="label"
+                  dataKey="salemonth"
                   tick={{ fill: "var(--text-muted)", fontSize: 11 }}
                   tickLine={false}
                   axisLine={false}
                 />
                 <YAxis
-                  yAxisId="left"
-                  tick={{ fill: "var(--text-muted)", fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                />
-                <YAxis
-                  yAxisId="right"
-                  orientation="right"
                   tick={{ fill: "var(--text-muted)", fontSize: 11 }}
                   tickLine={false}
                   axisLine={false}
                 />
                 <Tooltip
                   contentStyle={TT}
-                  formatter={(v, name) =>
-                    name === "Revenue"
-                      ? [`$${Number(v).toLocaleString()}`, "Revenue"]
-                      : [v, "Transactions"]
-                  }
-                />
-                <Legend
-                  wrapperStyle={{
-                    fontSize: 12,
-                    color: "var(--text-secondary)",
-                  }}
+                  formatter={(v) => [v, "Transactions"]}
                 />
                 <Bar
-                  yAxisId="left"
-                  dataKey="revenue"
-                  name="Revenue"
+                  dataKey="total_transactions"
+                  name="Transactions"
                   fill="#2563eb"
                   radius={[4, 4, 0, 0]}
-                />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="orders"
-                  name="Transactions"
-                  stroke="#d97706"
-                  strokeWidth={2}
-                  dot={{ r: 4, fill: "#d97706" }}
-                />
+                >
+                  {filtered.map((_, i) => (
+                    <Cell key={i} fill={i === 0 ? "#2563eb" : "#93c5fd"} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-
-          {/* Table */}
           <div className="table-wrap" style={{ marginTop: 16 }}>
-            <table>
+            <table className="rp-table">
               <thead>
                 <tr>
                   <th>Month</th>
                   <th>Transactions</th>
-                  <th>Total Revenue</th>
-                  <th>Avg. Per Transaction</th>
                 </tr>
               </thead>
               <tbody>
-                {chartData.map((row, i) => (
-                  <tr key={row.label}>
-                    <td style={{ fontWeight: 600 }}>{row.label}</td>
-                    <td>{row.orders}</td>
-                    <td style={{ fontWeight: 600 }}>
-                      ${row.revenue.toLocaleString()}
-                    </td>
-                    <td style={{ color: "var(--text-secondary)" }}>
-                      $
-                      {row.orders > 0
-                        ? (row.revenue / row.orders).toFixed(0)
-                        : "0"}
-                    </td>
+                {filtered.map((row) => (
+                  <tr key={row.salemonth}>
+                    <td style={{ fontWeight: 600 }}>{row.salemonth}</td>
+                    <td>{row.total_transactions}</td>
                   </tr>
                 ))}
               </tbody>

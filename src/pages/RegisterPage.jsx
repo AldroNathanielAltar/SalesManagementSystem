@@ -2,11 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { registerWithEmail, loginWithGoogle } from "../services/authService";
 
-/* ─────────────────────────────────────────────────────────────────────
-   IMPORTANT: Field component is defined OUTSIDE RegisterPage.
-   If it were defined inside, React would unmount/remount the <input>
-   on every keystroke (losing focus). Defined outside = stable reference.
-───────────────────────────────────────────────────────────────────── */
+/* ─── All sub-components defined OUTSIDE to prevent focus-loss bug ─── */
+
 function Field({
   name,
   label,
@@ -15,8 +12,8 @@ function Field({
   value,
   onChange,
   error,
-  icon: Icon,
   hint,
+  svgIcon,
 }) {
   return (
     <div style={s.fieldGroup}>
@@ -25,7 +22,7 @@ function Field({
         {hint && <span style={s.hint}>{hint}</span>}
       </label>
       <div style={s.inputWrap}>
-        {Icon && <Icon size={14} style={s.inputIcon} color="#64748b" />}
+        <span style={s.inputIconSpan}>{svgIcon}</span>
         <input
           type={type}
           placeholder={placeholder}
@@ -34,10 +31,10 @@ function Field({
           autoComplete={name}
           style={{
             ...s.input,
+            paddingLeft: 38,
             borderColor: error
               ? "rgba(239,68,68,0.6)"
               : "rgba(255,255,255,0.1)",
-            paddingLeft: Icon ? 38 : 14,
           }}
           onFocus={(e) => {
             e.target.style.borderColor = "#7c3aed";
@@ -73,19 +70,19 @@ function PwField({
         {hint && <span style={s.hint}>{hint}</span>}
       </label>
       <div style={s.inputWrap}>
-        {/* Lock icon */}
-        <svg
-          style={s.inputIconSvg}
-          width="14"
-          height="14"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="#64748b"
-          strokeWidth="2"
-        >
-          <rect x="3" y="11" width="18" height="11" rx="2" />
-          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-        </svg>
+        <span style={s.inputIconSpan}>
+          <svg
+            width="14"
+            height="14"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="#64748b"
+            strokeWidth="2"
+          >
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+        </span>
         <input
           type={showPw ? "text" : "password"}
           placeholder={
@@ -95,7 +92,7 @@ function PwField({
           }
           value={value}
           onChange={onChange}
-          autoComplete={name === "password" ? "new-password" : "new-password"}
+          autoComplete="new-password"
           style={{
             ...s.input,
             paddingLeft: 38,
@@ -151,40 +148,27 @@ function PwField({
   );
 }
 
-/* ── Icon components (stable, outside render) ── */
-const IconUser = ({ size = 14, color = "#64748b" }) => (
+/* ── Inline SVG icons ── */
+const svgUser = (
   <svg
-    width={size}
-    height={size}
+    width="14"
+    height="14"
     fill="none"
     viewBox="0 0 24 24"
-    stroke={color}
+    stroke="#64748b"
     strokeWidth="2"
   >
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
     <circle cx="12" cy="7" r="4" />
   </svg>
 );
-const IconAt = ({ size = 14, color = "#64748b" }) => (
+const svgEmail = (
   <svg
-    width={size}
-    height={size}
+    width="14"
+    height="14"
     fill="none"
     viewBox="0 0 24 24"
-    stroke={color}
-    strokeWidth="2"
-  >
-    <circle cx="12" cy="12" r="4" />
-    <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" />
-  </svg>
-);
-const IconMail = ({ size = 14, color = "#64748b" }) => (
-  <svg
-    width={size}
-    height={size}
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke={color}
+    stroke="#64748b"
     strokeWidth="2"
   >
     <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
@@ -192,11 +176,9 @@ const IconMail = ({ size = 14, color = "#64748b" }) => (
   </svg>
 );
 
-/* ── Main component ── */
 const EMPTY = {
   firstName: "",
   lastName: "",
-  username: "",
   email: "",
   password: "",
   confirmPassword: "",
@@ -224,7 +206,6 @@ export default function RegisterPage() {
     const e = {};
     if (!form.firstName.trim()) e.firstName = "First name is required.";
     if (!form.lastName.trim()) e.lastName = "Last name is required.";
-    if (!form.username.trim()) e.username = "Username is required.";
     if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Valid email is required.";
     if (form.password.length < 8)
       e.password = "Password must be at least 8 characters.";
@@ -246,7 +227,6 @@ export default function RegisterPage() {
       await registerWithEmail(form.email, form.password, {
         firstName: form.firstName,
         lastName: form.lastName,
-        username: form.username,
         full_name: `${form.firstName} ${form.lastName}`,
       });
       setSuccess(true);
@@ -268,13 +248,11 @@ export default function RegisterPage() {
     }
   }
 
-  /* ── Success screen ── */
   if (success) {
     return (
       <div style={s.page}>
         <div style={s.bgOrb1} />
         <div style={s.bgOrb2} />
-        <div style={s.bgOrb3} />
         <div style={s.bgGrid} />
         <div
           style={{
@@ -330,7 +308,7 @@ export default function RegisterPage() {
               marginBottom: 24,
             }}
           >
-            Note: new accounts are{" "}
+            New accounts are{" "}
             <strong style={{ color: "#fbbf24" }}>INACTIVE</strong> by default.
             An administrator must activate your account before you can log in.
           </p>
@@ -344,14 +322,10 @@ export default function RegisterPage() {
 
   return (
     <div style={s.page}>
-      {/* Background */}
       <div style={s.bgOrb1} />
       <div style={s.bgOrb2} />
-      <div style={s.bgOrb3} />
       <div style={s.bgGrid} />
-
       <div style={s.wrapper}>
-        {/* Brand — matches LoginPage exactly */}
         <div style={s.brand}>
           <div style={s.brandIcon}>
             <svg
@@ -369,7 +343,6 @@ export default function RegisterPage() {
           <p style={s.brandSub}>Sales Management System</p>
         </div>
 
-        {/* Card */}
         <div style={{ ...s.card, maxWidth: 520 }}>
           <div style={s.cardAccent} />
           <h2 style={s.cardTitle}>Create your account</h2>
@@ -384,6 +357,7 @@ export default function RegisterPage() {
                 background: "rgba(239,68,68,0.12)",
                 border: "1px solid rgba(239,68,68,0.35)",
                 color: "#fca5a5",
+                marginBottom: 16,
               }}
             >
               <svg
@@ -404,47 +378,35 @@ export default function RegisterPage() {
           )}
 
           <form onSubmit={handleRegister} noValidate>
-            {/* First + Last Name row */}
             <div style={s.row2}>
               <Field
                 name="firstName"
                 label="First Name *"
                 placeholder="Juan"
+                svgIcon={svgUser}
                 value={form.firstName}
                 onChange={set("firstName")}
                 error={errors.firstName}
-                icon={IconUser}
               />
               <Field
                 name="lastName"
                 label="Last Name *"
                 placeholder="dela Cruz"
+                svgIcon={svgUser}
                 value={form.lastName}
                 onChange={set("lastName")}
                 error={errors.lastName}
-                icon={IconUser}
               />
             </div>
-
-            <Field
-              name="username"
-              label="Username *"
-              placeholder="jdelacruz"
-              value={form.username}
-              onChange={set("username")}
-              error={errors.username}
-              icon={IconAt}
-            />
-
             <Field
               name="email"
               label="Email Address *"
-              type="email"
               placeholder="juan@hopeinc.com"
+              svgIcon={svgEmail}
               value={form.email}
               onChange={set("email")}
               error={errors.email}
-              icon={IconMail}
+              type="email"
             />
 
             <PwField
@@ -457,7 +419,6 @@ export default function RegisterPage() {
               showPw={showPw}
               onToggle={() => setShowPw((v) => !v)}
             />
-
             <PwField
               name="confirmPassword"
               label="Confirm Password *"
@@ -503,14 +464,12 @@ export default function RegisterPage() {
             </button>
           </form>
 
-          {/* Divider */}
           <div style={s.divider}>
             <div style={s.dividerLine} />
             <span style={s.dividerText}>or</span>
             <div style={s.dividerLine} />
           </div>
 
-          {/* Google */}
           <button
             type="button"
             onClick={handleGoogle}
@@ -569,7 +528,6 @@ export default function RegisterPage() {
             </Link>
           </p>
         </div>
-
         <p style={s.copyright}>
           © {new Date().getFullYear()} Hope, Inc. · New Era University — BS
           Information Technology
@@ -579,7 +537,6 @@ export default function RegisterPage() {
   );
 }
 
-/* ── Shared styles (same palette as LoginPage) ── */
 const s = {
   page: {
     minHeight: "100vh",
@@ -615,23 +572,11 @@ const s = {
     borderRadius: "50%",
     pointerEvents: "none",
   },
-  bgOrb3: {
-    position: "absolute",
-    top: "40%",
-    left: "30%",
-    width: 400,
-    height: 400,
-    background:
-      "radial-gradient(circle, rgba(167,139,250,0.12) 0%, transparent 70%)",
-    borderRadius: "50%",
-    pointerEvents: "none",
-  },
   bgGrid: {
     position: "absolute",
     inset: 0,
     pointerEvents: "none",
-    backgroundImage: `linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-                     linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)`,
+    backgroundImage: `linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)`,
     backgroundSize: "60px 60px",
   },
   wrapper: {
@@ -693,7 +638,6 @@ const s = {
     padding: "11px 14px",
     borderRadius: 12,
     fontSize: 13,
-    marginBottom: 18,
     lineHeight: 1.5,
   },
   row2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
@@ -705,17 +649,18 @@ const s = {
     color: "#cbd5e1",
     marginBottom: 6,
   },
-  hint: {
-    fontSize: 11,
-    color: "#64748b",
-    marginLeft: 6,
-    fontWeight: 400,
-    letterSpacing: 0,
-    textTransform: "none",
-  },
+  hint: { fontSize: 11, color: "#64748b", marginLeft: 6, fontWeight: 400 },
   inputWrap: { position: "relative", display: "flex", alignItems: "center" },
-  inputIcon: { position: "absolute", left: 13, pointerEvents: "none" },
-  inputIconSvg: { position: "absolute", left: 13, pointerEvents: "none" },
+  inputIconSpan: {
+    position: "absolute",
+    left: 12,
+    top: "50%",
+    transform: "translateY(-50%)",
+    pointerEvents: "none",
+    display: "flex",
+    alignItems: "center",
+    zIndex: 1,
+  },
   input: {
     width: "100%",
     padding: "10px 14px",

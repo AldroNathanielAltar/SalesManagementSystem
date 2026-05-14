@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabaseClient'
+import { supabase } from "../lib/supabaseClient";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET DETAIL BY TRANSACTION
@@ -6,17 +6,17 @@ import { supabase } from '../lib/supabaseClient'
 // ─────────────────────────────────────────────────────────────────────────────
 export async function getDetailByTrans(transNo, userType) {
   let query = supabase
-    .from('salesdetail_with_product')
-    .select('*')
-    .eq('transNo', transNo)
+    .from("salesdetail_with_product")
+    .select("*")
+    .eq("transNo", transNo);
 
-  if (userType === 'USER') {
-    query = query.eq('record_status', 'ACTIVE')
+  if (userType === "USER") {
+    query = query.eq("record_status", "ACTIVE");
   }
 
-  const { data, error } = await query
-  if (error) throw error
-  return data
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -26,19 +26,21 @@ export async function getDetailByTrans(transNo, userType) {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function addDetailLine({ transNo, prodCode, quantity, stamp }) {
   const { data, error } = await supabase
-    .from('salesDetail')
-    .insert([{
-      transNo,
-      prodCode,
-      quantity,
-      record_status: 'ACTIVE',
-      stamp
-    }])
+    .from("salesdetail")
+    .insert([
+      {
+        transNo,
+        prodCode,
+        quantity,
+        record_status: "ACTIVE",
+        stamp,
+      },
+    ])
     .select()
-    .single()
+    .single();
 
-  if (error) throw error
-  return data
+  if (error) throw error;
+  return data;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,15 +50,15 @@ export async function addDetailLine({ transNo, prodCode, quantity, stamp }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function updateDetailLine(transNo, prodCode, { quantity, stamp }) {
   const { data, error } = await supabase
-    .from('salesDetail')
+    .from("salesdetail")
     .update({ quantity, stamp })
-    .eq('transNo', transNo)
-    .eq('prodCode', prodCode)
+    .eq("transNo", transNo)
+    .eq("prodCode", prodCode)
     .select()
-    .single()
+    .single();
 
-  if (error) throw error
-  return data
+  if (error) throw error;
+  return data;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,18 +68,18 @@ export async function updateDetailLine(transNo, prodCode, { quantity, stamp }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function softDeleteDetailLine(transNo, prodCode, stamp) {
   const { data, error } = await supabase
-    .from('salesDetail')
+    .from("salesdetail")
     .update({
-      record_status: 'INACTIVE',
-      stamp
+      record_status: "INACTIVE",
+      stamp,
     })
-    .eq('transNo', transNo)
-    .eq('prodCode', prodCode)
+    .eq("transNo", transNo)
+    .eq("prodCode", prodCode)
     .select()
-    .single()
+    .single();
 
-  if (error) throw error
-  return data
+  if (error) throw error;
+  return data;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,16 +89,16 @@ export async function softDeleteDetailLine(transNo, prodCode, stamp) {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function recoverDetailLine(transNo, prodCode, stamp) {
   const { data, error } = await supabase
-    .from('salesDetail')
+    .from("salesdetail")
     .update({
-      record_status: 'ACTIVE',
-      stamp
+      record_status: "ACTIVE",
+      stamp,
     })
-    .eq('transNo', transNo)
-    .eq('prodCode', prodCode)
+    .eq("transNo", transNo)
+    .eq("prodCode", prodCode)
     .select()
-    .single()
+    .single();
 
-  if (error) throw error
-  return data
+  if (error) throw error;
+  return data;
 }

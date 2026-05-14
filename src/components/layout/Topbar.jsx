@@ -1,20 +1,12 @@
 import { useState } from "react";
 import { Bell, Menu, Check } from "lucide-react";
 import { useApp } from "../../context/AppContext";
-import { useAuth } from "../../context/AuthContext";
 import "./Topbar.css";
 
 export default function Topbar({ onMenuClick, title }) {
   const [showNotifs, setShowNotifs] = useState(false);
   const { notifications, markRead, markAllRead } = useApp();
-  const { currentUser } = useAuth();
-
   const unread = notifications.filter((n) => !n.read).length;
-
-  // Build avatar initials from username or email
-  const avatarInitials = currentUser?.username
-    ? currentUser.username.slice(0, 2).toUpperCase()
-    : (currentUser?.email || "U").slice(0, 2).toUpperCase();
 
   return (
     <header className="topbar">
@@ -26,7 +18,7 @@ export default function Topbar({ onMenuClick, title }) {
       </div>
 
       <div className="tb-right">
-        {/* Notifications */}
+        {/* Notifications bell only — avatar removed */}
         <div className="tb-rel">
           <button
             className="tb-icon-btn"
@@ -76,9 +68,6 @@ export default function Topbar({ onMenuClick, title }) {
             </div>
           )}
         </div>
-
-        {/* Avatar */}
-        <div className="tb-avatar">{avatarInitials}</div>
       </div>
     </header>
   );
