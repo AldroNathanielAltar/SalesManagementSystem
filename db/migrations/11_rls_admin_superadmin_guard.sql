@@ -1,3 +1,8 @@
+-- ============================================================
+-- PR    : db/rls-admin-guard
+-- Sprint: 3
+-- Author: cydencenteno-byte
+-- ============================================================
 ALTER TABLE public.user ENABLE ROW LEVEL SECURITY;
 
 -- ADMIN can UPDATE record_status only WHERE user_type != 'SUPERADMIN'
