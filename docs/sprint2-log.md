@@ -25,7 +25,7 @@
 - ✅ **Pre-Implementation Audit:** Defined 39-point Rights Matrix via Vitest.
 - ✅ **Database Integration Testing:** Validated Soft-Delete and Price Auto-fill logic.
 - ✅ **Regression Testing:** Confirmed Sprint 1 Auth flows remain functional (47/47 Total Tests Passing).
-- ✅ **Sprint 2 Documentation:** Initialized test plan and log.
+- ✅ **Sprint 2 Documentation:** Sprint 2 test plan and log completed.
 
 ---
 
@@ -41,14 +41,14 @@
 
 ## Blockers
 
-| Blocker                             | Affected Member | Status              |
-| :---------------------------------- | :-------------- | :------------------ |
-| Integration with real `AuthContext` | M5              | ⏳ Pending M4 Merge |
+| Blocker                             | Affected Member | Status                                  |
+| :---------------------------------- | :-------------- | :-------------------------------------- |
+| Integration with real `AuthContext` | M5              | ✅ Resolved — M4 merged before Sprint 3 |
 
 ---
 
 ## Goals for Sprint 3
 
 - Transition tests from mocked logic to real Context providers.
-- Audit the Stock Level Validation logic on transaction submission.
-- Complete final UI/UX accessibility audit.
+- Full E2E production test suite covering Sales CRUD, SalesDetail CRUD, Lookups, Reports, Admin Module, SUPERADMIN protection, cascade soft-delete and recovery.
+- Complete final documentation (User Manual, Presentation Slides, Sprint 3 Log).
