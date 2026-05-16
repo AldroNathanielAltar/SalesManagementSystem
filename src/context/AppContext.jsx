@@ -47,6 +47,28 @@ export function AppProvider({ children }) {
     return currentUser?.user_type === "SUPERADMIN";
   }, [currentUser?.user_type]);
 
+  // ── NOTIFICATION FUNCTIONS ──────────────────────────────────────────────
+  const addNotification = useCallback((text, type = "info") => {
+    const newNotification = {
+      id: Date.now(),
+      text,
+      time: new Date().toLocaleString(),
+      read: false,
+      type,
+    };
+    setNotifications((prev) => [newNotification, ...prev]);
+  }, []);
+
+  const markRead = useCallback((id) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    );
+  }, []);
+
+  const markAllRead = useCallback(() => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  }, []);
+
   useEffect(() => {
     if (!currentUser) {
       loadedRef.current = false;
@@ -348,7 +370,7 @@ export function AppProvider({ children }) {
     await loadAll();
   }, []);
 
-  // ── SALES CRUD ──────────────────────────────────────────────────────────
+  // ── SALES CRUD with notifications ──────────────────────────────────────────
   const addSale = useCallback(
     async (data) => {
       const { data: ins, error } = await supabase
@@ -364,9 +386,13 @@ export function AppProvider({ children }) {
         .single();
       if (error) throw error;
       await reloadSales();
+      addNotification(
+        `✅ Transaction ${data.transno} was created successfully`,
+        "success",
+      );
       return ins;
     },
-    [reloadSales],
+    [reloadSales, addNotification],
   );
 
   const updateSale = useCallback(
@@ -382,9 +408,13 @@ export function AppProvider({ children }) {
         .single();
       if (error) throw error;
       await reloadSales();
+      addNotification(
+        `✏️ Transaction ${transno} was updated by ${currentUser?.username || "Admin"}`,
+        "info",
+      );
       return upd;
     },
-    [reloadSales],
+    [reloadSales, addNotification, currentUser],
   );
 
   const softDeleteSale = useCallback(
@@ -401,11 +431,15 @@ export function AppProvider({ children }) {
         .eq("transno", transno);
       if (error) throw error;
       await reloadSales();
+      addNotification(
+        `🗑️ Transaction ${transno} was soft-deleted by ${currentUser?.username || "Super Admin"}`,
+        "warning",
+      );
     },
-    [reloadSales, isSuperAdmin],
+    [reloadSales, isSuperAdmin, addNotification, currentUser],
   );
 
-  // ── SALES DETAIL CRUD ───────────────────────────────────────────────────
+  // ── SALES DETAIL CRUD with notifications ───────────────────────────────────
   const addDetailLine = useCallback(
     async (line) => {
       const { data: ins, error } = await supabase
@@ -421,9 +455,13 @@ export function AppProvider({ children }) {
         .single();
       if (error) throw error;
       await reloadSales();
+      addNotification(
+        `➕ Product ${line.prodcode} was added to transaction ${line.transno}`,
+        "info",
+      );
       return ins;
     },
-    [reloadSales],
+    [reloadSales, addNotification],
   );
 
   const updateDetailLine = useCallback(
@@ -437,9 +475,13 @@ export function AppProvider({ children }) {
         .single();
       if (error) throw error;
       await reloadSales();
+      addNotification(
+        `📦 Product ${prodcode} quantity was updated in transaction ${transno}`,
+        "info",
+      );
       return upd;
     },
-    [reloadSales],
+    [reloadSales, addNotification],
   );
 
   const softDeleteDetailLine = useCallback(
@@ -451,8 +493,12 @@ export function AppProvider({ children }) {
         .eq("prodcode", prodcode);
       if (error) throw error;
       await reloadSales();
+      addNotification(
+        `❌ Product ${prodcode} was removed from transaction ${transno}`,
+        "warning",
+      );
     },
-    [reloadSales],
+    [reloadSales, addNotification],
   );
 
   // ── Helper to calculate totals from sales and details ───────────────────
@@ -505,12 +551,9 @@ export function AppProvider({ children }) {
         isSuperAdmin: isSuperAdmin(),
         // Notifications
         notifications,
-        markRead: (id) =>
-          setNotifications((prev) =>
-            prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
-          ),
-        markAllRead: () =>
-          setNotifications((prev) => prev.map((n) => ({ ...n, read: true }))),
+        addNotification,
+        markRead,
+        markAllRead,
       }}
     >
       {children}

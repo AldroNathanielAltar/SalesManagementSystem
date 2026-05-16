@@ -7,7 +7,7 @@ import ConfirmModal from "../components/ui/ConfirmModal";
 import "./DeletedItemsPage.css";
 
 export default function DeletedItemsPage() {
-  const { reloadAll } = useApp();
+  const { reloadAll, addNotification } = useApp();
   const { currentUser } = useAuth();
   const [tab, setTab] = useState("transactions");
   const [confirm, setConfirm] = useState(null);
@@ -181,6 +181,10 @@ export default function DeletedItemsPage() {
 
       await fetchDeletedItems();
       await reloadAll();
+      addNotification(
+        `🔄 Transaction ${transno} was recovered from deleted items`,
+        "success",
+      );
       alert(`Transaction ${transno} recovered successfully!`);
     } catch (err) {
       alert(err.message || "Failed to recover sale");
@@ -204,6 +208,10 @@ export default function DeletedItemsPage() {
 
       await fetchDeletedItems();
       await reloadAll();
+      addNotification(
+        `🔄 Line item ${prodcode} from transaction ${transno} was recovered`,
+        "success",
+      );
       alert(`Line item ${prodcode} recovered successfully!`);
     } catch (err) {
       alert(err.message || "Failed to recover line item");
@@ -242,6 +250,10 @@ export default function DeletedItemsPage() {
 
       await fetchDeletedItems();
       await reloadAll();
+      addNotification(
+        `💀 Transaction ${transno} was permanently deleted by ${currentUser?.username || "Super Admin"}`,
+        "error",
+      );
       alert(`Transaction ${transno} permanently deleted.`);
     } catch (err) {
       alert(err.message || "Failed to delete sale");
@@ -271,6 +283,10 @@ export default function DeletedItemsPage() {
 
       await fetchDeletedItems();
       await reloadAll();
+      addNotification(
+        `💀 Line item ${prodcode} from transaction ${transno} was permanently deleted`,
+        "error",
+      );
       alert(`Line item ${prodcode} permanently deleted.`);
     } catch (err) {
       alert(err.message || "Failed to delete line item");
