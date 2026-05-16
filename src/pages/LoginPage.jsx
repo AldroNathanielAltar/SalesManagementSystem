@@ -1,35 +1,61 @@
+/**
+ * LoginPage.jsx
+ * Handles user authentication including email/password login, Google OAuth, and password reset
+ */
+
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { loginWithEmail, loginWithGoogle } from "../services/authService";
+import {
+  loginWithEmail,
+  loginWithGoogle,
+  resetPassword,
+} from "../services/authService";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  // Form state for login
   const [form, setForm] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState(
     searchParams.get("error") === "not_activated"
-      ? "Your account is pending activation. Please contact your administrator."
+      ? "⚠️ Your account is pending activation. Please contact your administrator."
       : searchParams.get("registered") === "true"
-        ? "Account created! An administrator must activate your account before you can log in."
-        : "",
+        ? "✅ Account created! An administrator must activate your account before you can log in."
+        : searchParams.get("reset_sent") === "true"
+          ? "📧 Password reset email sent! Check your inbox."
+          : "",
   );
+
+  // UI states
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  // Forgot Password modal states
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+
+  /**
+   * Validates login form inputs
+   * @returns {object} Error object with field errors
+   */
   const validate = () => {
     const e = {};
     if (!form.email.trim()) e.email = "Email address is required.";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       e.email = "Please enter a valid email address.";
     if (!form.password) e.password = "Password is required.";
-    else if (form.password.length < 6)
-      e.password = "Password must be at least 6 characters.";
     return e;
   };
 
+  /**
+   * Handles email/password login submission
+   * @param {Event} e - Form submit event
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setServerError("");
@@ -44,16 +70,17 @@ export default function LoginPage() {
       await loginWithEmail(form.email, form.password);
       navigate("/sales", { replace: true });
     } catch (err) {
-      setServerError(
-        err.message === "Invalid login credentials"
-          ? "Incorrect email or password. Please try again."
-          : err.message || "Sign in failed. Please try again.",
-      );
+      console.error("Login error:", err.message);
+      setServerError(err.message || "Sign in failed. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
+  /**
+   * Handles Google OAuth login
+   * Redirects to Google for authentication
+   */
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     setServerError("");
@@ -65,21 +92,67 @@ export default function LoginPage() {
     }
   };
 
+  /**
+   * Handles password reset request
+   * Sends reset email to the provided email address
+   */
+  const handleResetPassword = async () => {
+    if (!resetEmail) {
+      setServerError("Please enter your email address.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resetEmail)) {
+      setServerError("Please enter a valid email address.");
+      return;
+    }
+
+    setResetLoading(true);
+    setServerError("");
+
+    try {
+      await resetPassword(resetEmail);
+      setResetSuccess(true);
+      // Close modal after 2 seconds
+      setTimeout(() => {
+        setShowResetModal(false);
+        setResetEmail("");
+        setResetSuccess(false);
+      }, 2000);
+    } catch (err) {
+      console.error("Password reset error:", err);
+      setServerError(
+        err.message || "Failed to send reset email. Please try again.",
+      );
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  /**
+   * Updates form field value and clears corresponding error
+   * @param {string} key - Field name to update
+   * @returns {Function} Event handler function
+   */
   const field = (key) => (e) => {
     setForm((f) => ({ ...f, [key]: e.target.value }));
     setErrors((er) => ({ ...er, [key]: "" }));
   };
 
+  // Determine alert style based on message type
+  const isSuccessMessage =
+    serverError && (serverError.includes("✅") || serverError.includes("📧"));
+  const isWarningMessage = serverError && serverError.includes("⚠️");
+
   return (
     <div style={styles.page}>
-      {/* ── Rich animated background ── */}
+      {/* Animated background elements */}
       <div style={styles.bgOrb1} />
       <div style={styles.bgOrb2} />
       <div style={styles.bgOrb3} />
       <div style={styles.bgGrid} />
 
       <div style={styles.wrapper}>
-        {/* Brand */}
+        {/* Brand Section */}
         <div style={styles.brand}>
           <div style={styles.brandIcon}>
             <svg
@@ -97,7 +170,7 @@ export default function LoginPage() {
           <p style={styles.brandSub}>Sales Management System</p>
         </div>
 
-        {/* Card */}
+        {/* Login Card */}
         <div style={styles.card}>
           {/* Top accent bar */}
           <div style={styles.cardAccent} />
@@ -105,16 +178,16 @@ export default function LoginPage() {
           <h2 style={styles.cardTitle}>Welcome back</h2>
           <p style={styles.cardSub}>Sign in to your account to continue</p>
 
-          {/* Server error / success */}
+          {/* Server error / success message */}
           {serverError && (
             <div
               style={{
                 ...styles.alert,
-                background: serverError.includes("created")
+                background: isSuccessMessage
                   ? "rgba(16,185,129,0.12)"
                   : "rgba(239,68,68,0.12)",
-                border: `1px solid ${serverError.includes("created") ? "rgba(16,185,129,0.35)" : "rgba(239,68,68,0.35)"}`,
-                color: serverError.includes("created") ? "#6ee7b7" : "#fca5a5",
+                border: `1px solid ${isSuccessMessage ? "rgba(16,185,129,0.35)" : "rgba(239,68,68,0.35)"}`,
+                color: isSuccessMessage ? "#6ee7b7" : "#fca5a5",
               }}
             >
               <svg
@@ -126,16 +199,22 @@ export default function LoginPage() {
                 stroke="currentColor"
                 strokeWidth="2"
               >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
+                {isSuccessMessage ? (
+                  <polyline points="20 6 9 17 4 12" />
+                ) : (
+                  <>
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </>
+                )}
               </svg>
               {serverError}
             </div>
           )}
 
           <form onSubmit={handleSubmit} noValidate>
-            {/* Email */}
+            {/* Email Field */}
             <div style={styles.fieldGroup}>
               <label style={styles.label}>Email address</label>
               <div style={styles.inputWrap}>
@@ -178,8 +257,8 @@ export default function LoginPage() {
               {errors.email && <p style={styles.fieldErr}>{errors.email}</p>}
             </div>
 
-            {/* Password */}
-            <div style={{ ...styles.fieldGroup, marginBottom: 24 }}>
+            {/* Password Field */}
+            <div style={{ ...styles.fieldGroup, marginBottom: 16 }}>
               <label style={styles.label}>Password</label>
               <div style={styles.inputWrap}>
                 <svg
@@ -256,7 +335,18 @@ export default function LoginPage() {
               )}
             </div>
 
-            {/* Submit */}
+            {/* Forgot Password Link */}
+            <div style={{ textAlign: "right", marginBottom: 20 }}>
+              <button
+                type="button"
+                onClick={() => setShowResetModal(true)}
+                style={styles.forgotPasswordBtn}
+              >
+                Forgot Password?
+              </button>
+            </div>
+
+            {/* Sign In Button */}
             <button
               type="submit"
               disabled={loading || googleLoading}
@@ -300,7 +390,7 @@ export default function LoginPage() {
             <div style={styles.dividerLine} />
           </div>
 
-          {/* Google */}
+          {/* Google Sign In Button */}
           <button
             type="button"
             onClick={handleGoogleLogin}
@@ -352,6 +442,7 @@ export default function LoginPage() {
             Sign in with Google
           </button>
 
+          {/* Register Link */}
           <p style={styles.footerLink}>
             Don't have an account?{" "}
             <Link to="/register" style={styles.link}>
@@ -365,11 +456,79 @@ export default function LoginPage() {
           Information Technology
         </p>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showResetModal && (
+        <div
+          style={styles.modalOverlay}
+          onClick={() => setShowResetModal(false)}
+        >
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Reset Password</h3>
+              <button
+                style={styles.modalClose}
+                onClick={() => setShowResetModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={styles.modalBody}>
+              {resetSuccess ? (
+                <div style={styles.resetSuccess}>
+                  <svg
+                    width="40"
+                    height="40"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth="2"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <p>Password reset email sent! Check your inbox.</p>
+                </div>
+              ) : (
+                <>
+                  <p style={styles.modalText}>
+                    Enter your email address and we'll send you a link to reset
+                    your password.
+                  </p>
+                  <input
+                    type="email"
+                    placeholder="Enter your email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    style={styles.modalInput}
+                  />
+                </>
+              )}
+            </div>
+            <div style={styles.modalFooter}>
+              <button
+                style={styles.modalCancel}
+                onClick={() => setShowResetModal(false)}
+              >
+                Cancel
+              </button>
+              {!resetSuccess && (
+                <button
+                  style={styles.modalSubmit}
+                  onClick={handleResetPassword}
+                  disabled={resetLoading}
+                >
+                  {resetLoading ? "Sending..." : "Send Reset Link"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-/* ── Inline styles — zero CSS dependency ── */
+/* ── Inline styles ── */
 const styles = {
   page: {
     minHeight: "100vh",
@@ -524,9 +683,17 @@ const styles = {
     display: "flex",
     alignItems: "center",
     padding: 4,
+  },
+  forgotPasswordBtn: {
+    background: "none",
+    border: "none",
+    color: "#a78bfa",
+    fontSize: 12,
+    cursor: "pointer",
+    textDecoration: "underline",
     transition: "color 0.15s",
   },
-  fieldErr: { fontSize: 12, color: "#f87171", marginTop: 6, margin: "6px 0 0" },
+  fieldErr: { fontSize: 12, color: "#f87171", marginTop: 6 },
   submitBtn: {
     width: "100%",
     padding: "11px 0",
@@ -542,7 +709,6 @@ const styles = {
     justifyContent: "center",
     gap: 8,
     boxShadow: "0 4px 20px rgba(124,58,237,0.45)",
-    transition: "opacity 0.15s, transform 0.15s",
     fontFamily: "inherit",
   },
   spinner: { animation: "spin 0.7s linear infinite" },
@@ -563,7 +729,6 @@ const styles = {
     fontSize: 14,
     fontWeight: 500,
     cursor: "pointer",
-    transition: "background 0.15s, border-color 0.15s",
     fontFamily: "inherit",
   },
   footerLink: {
@@ -571,7 +736,6 @@ const styles = {
     fontSize: 13,
     color: "#64748b",
     marginTop: 20,
-    marginBottom: 0,
   },
   link: { color: "#a78bfa", fontWeight: 600, textDecoration: "none" },
   copyright: {
@@ -579,6 +743,81 @@ const styles = {
     color: "#334155",
     marginTop: 20,
     textAlign: "center",
+  },
+  // Modal styles
+  modalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "rgba(0,0,0,0.7)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10000,
+  },
+  modal: {
+    background: "white",
+    borderRadius: 16,
+    width: 400,
+    maxWidth: "90%",
+    overflow: "hidden",
+    boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+  },
+  modalHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "16px 20px",
+    borderBottom: "1px solid #e5e7eb",
+  },
+  modalTitle: { margin: 0, fontSize: 18, fontWeight: 600, color: "#111827" },
+  modalClose: {
+    background: "none",
+    border: "none",
+    fontSize: 20,
+    cursor: "pointer",
+    color: "#6b7280",
+  },
+  modalBody: { padding: "20px" },
+  modalText: { margin: "0 0 16px 0", color: "#4b5563", fontSize: 14 },
+  modalInput: {
+    width: "100%",
+    padding: "10px 12px",
+    border: "1px solid #e5e7eb",
+    borderRadius: 8,
+    fontSize: 14,
+    boxSizing: "border-box",
+  },
+  modalFooter: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 12,
+    padding: "16px 20px",
+    borderTop: "1px solid #e5e7eb",
+  },
+  modalCancel: {
+    padding: "8px 16px",
+    background: "#f3f4f6",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontSize: 14,
+  },
+  modalSubmit: {
+    padding: "8px 16px",
+    background: "#7c3aed",
+    color: "white",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontSize: 14,
+  },
+  resetSuccess: {
+    textAlign: "center",
+    padding: "20px",
+    color: "#10b981",
   },
 };
 

@@ -1,144 +1,184 @@
 // src/context/AuthContext.jsx
-// fix: add window focus handler to prevent loading stuck on tab switch
+// FIXED - Properly sets authLoading to false
+// Handles user authentication, session management, and user status checking
 
-import { createContext, useContext, useEffect, useState, useRef } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
+// Create Auth Context for global authentication state
 const AuthContext = createContext(null);
-const USERID_COLS = ["userid", "userId", "user_id"];
 
 export function AuthProvider({ children }) {
+  // State for storing the current authenticated user
   const [currentUser, setCurrentUser] = useState(null);
+  // Loading state - true while checking authentication status
   const [authLoading, setAuthLoading] = useState(true);
+  // Error state for authentication failures
   const [authError, setAuthError] = useState("");
-  const resolvedRef = useRef(false);
-  const currentUidRef = useRef(null); // track which user is resolved
 
   useEffect(() => {
-    const timeout = setTimeout(() => setAuthLoading(false), 5000);
+    // Flag to prevent state updates if component unmounts
+    let isMounted = true;
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      clearTimeout(timeout);
-      if (session) {
-        // Only skip if SAME user already resolved
-        if (resolvedRef.current && currentUidRef.current === session.user.id) {
-          setAuthLoading(false);
+    /**
+     * Checks the user's session and fetches user data from database
+     * - Gets current session from Supabase
+     * - Fetches corresponding user record from custom user table
+     * - Validates if user is active
+     * - Sets currentUser state with combined data
+     */
+    const checkUser = async () => {
+      try {
+        console.log("Checking user session...");
+
+        // Get current session from Supabase Auth
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error("Session error:", sessionError);
+        }
+
+        // No active session - user is not logged in
+        if (!session?.user) {
+          console.log("No session found");
+          if (isMounted) {
+            setCurrentUser(null);
+            setAuthLoading(false);
+          }
           return;
         }
-        await resolveUser(session);
-      }
-      setAuthLoading(false);
-    });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session) {
-        // Always resolve on SIGNED_IN — user just logged in
-        if (currentUidRef.current !== session.user.id) {
-          resolvedRef.current = false; // new user — force re-resolve
+        console.log("Session found for user:", session.user.id);
+
+        // Fetch user record from custom user table using userid
+        const { data: userRow, error: userError } = await supabase
+          .from("user")
+          .select("*")
+          .eq("userid", session.user.id)
+          .maybeSingle();
+
+        if (userError && userError.code !== "PGRST116") {
+          console.error("User fetch error:", userError);
         }
-        if (!resolvedRef.current) {
-          setAuthLoading(true);
-          await resolveUser(session);
+
+        // Check if user account is inactive
+        if (userRow?.record_status === "INACTIVE") {
+          console.log("User is inactive");
+          // Sign out inactive users
+          await supabase.auth.signOut();
+          if (isMounted) {
+            setCurrentUser(null);
+            setAuthError("Account is inactive. Please contact administrator.");
+            setAuthLoading(false);
+          }
+        } else {
+          // Merge Supabase Auth user data with custom user table data
+          const userData = {
+            id: session.user.id,
+            userid: session.user.id,
+            email: session.user.email,
+            username:
+              userRow?.username || session.user.email?.split("@")[0] || "user",
+            user_type: userRow?.user_type || "USER",
+            record_status: userRow?.record_status || "ACTIVE",
+            firstname: userRow?.firstname || "",
+            lastname: userRow?.lastname || "",
+          };
+
+          console.log(
+            "User data set:",
+            userData.username,
+            "- Role:",
+            userData.user_type,
+          );
+          if (isMounted) {
+            setCurrentUser(userData);
+            setAuthLoading(false);
+          }
+        }
+      } catch (err) {
+        console.error("Auth error:", err);
+        if (isMounted) {
           setAuthLoading(false);
         }
       }
-      if (event === "TOKEN_REFRESHED") return; // silent
-      if (event === "SIGNED_OUT") {
-        resolvedRef.current = false;
-        currentUidRef.current = null;
-        setCurrentUser(null);
-        setAuthLoading(false);
-        setAuthError("");
+    };
+
+    // Initial session check on component mount
+    checkUser();
+
+    // Listen for authentication state changes (login, logout, token refresh)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth state change:", event);
+
+      // When user signs in, refresh user data
+      if (event === "SIGNED_IN" && session) {
+        checkUser();
+      }
+      // When user signs out, clear user state
+      else if (event === "SIGNED_OUT") {
+        if (isMounted) {
+          setCurrentUser(null);
+          setAuthLoading(false);
+        }
       }
     });
 
+    // Cleanup function - unsubscribe from auth changes and prevent memory leaks
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
-      clearTimeout(timeout);
     };
   }, []);
 
-  async function resolveUser(session) {
-    setAuthError("");
-    let userRow = null;
-
-    for (const col of USERID_COLS) {
-      const { data, error } = await supabase
-        .from("user")
-        .select("*")
-        .eq(col, session.user.id)
-        .single();
-      if (!error && data) {
-        userRow = data;
-        break;
-      }
-    }
-
-    if (!userRow) {
-      // No row yet — allow in with basic profile
-      const meta = session.user.user_metadata || {};
-      setCurrentUser({
-        id: session.user.id,
-        userid: session.user.id,
-        userId: session.user.id,
-        email: session.user.email,
-        username:
-          meta.username || meta.full_name || session.user.email?.split("@")[0],
-        user_type: "USER",
-        record_status: "ACTIVE",
-        user_metadata: meta,
-      });
-      resolvedRef.current = true;
-      currentUidRef.current = session.user.id;
-      return;
-    }
-
-    if (userRow.record_status === "INACTIVE") {
-      await supabase.auth.signOut();
-      setAuthError("INACTIVE");
-      setCurrentUser(null);
-      resolvedRef.current = false;
-      currentUidRef.current = null;
-      return;
-    }
-
-    const meta = session.user.user_metadata || {};
-    setCurrentUser({
-      ...session.user,
-      userid:
-        userRow.userid || userRow.userId || userRow.user_id || session.user.id,
-      userId:
-        userRow.userid || userRow.userId || userRow.user_id || session.user.id,
-      username: userRow.username || userRow.user_name,
-      user_type: userRow.user_type || "USER",
-      record_status: userRow.record_status || "ACTIVE",
-      user_metadata: meta,
-    });
-    resolvedRef.current = true;
-    currentUidRef.current = session.user.id;
-  }
-
-  async function signOut() {
-    resolvedRef.current = false;
-    currentUidRef.current = null;
+  /**
+   * Signs out the current user
+   * - Clears local user state
+   * - Calls Supabase signOut
+   */
+  const signOut = async () => {
     setCurrentUser(null);
-    setAuthError("");
     await supabase.auth.signOut();
-  }
+  };
 
+  // Helper booleans for role-based access control
+  const isSuperAdmin = currentUser?.user_type === "SUPERADMIN";
+  const isAdmin =
+    currentUser?.user_type === "ADMIN" ||
+    currentUser?.user_type === "SUPERADMIN";
+
+  // Provide authentication context to child components
   return (
     <AuthContext.Provider
-      value={{ currentUser, authLoading, authError, setAuthError, signOut }}
+      value={{
+        currentUser, // Current user object with merged auth and database data
+        authLoading, // Boolean indicating if auth is still loading
+        authError, // Error message if authentication failed
+        setAuthError, // Function to manually set auth error
+        signOut, // Function to sign out user
+        isSuperAdmin, // Boolean - true if user is SUPERADMIN
+        isAdmin, // Boolean - true if user is ADMIN or SUPERADMIN
+        userType: currentUser?.user_type || "USER", // User role type
+      }}
     >
       {children}
     </AuthContext.Provider>
   );
 }
 
+// Export useAuth as a named export
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
-  return ctx;
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used inside <AuthProvider>");
+  }
+  return context;
 }
+
+// Also export as default for flexibility
+export default AuthProvider;

@@ -86,6 +86,46 @@
   text-align: center;
 }
 
+/* Status Badge - Solid color that exactly matches the word */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  min-width: 70px;
+}
+
+.status-active {
+  background: #22c55e;
+  color: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.status-inactive {
+  background: #dc2626;
+  color: white;
+}
+
+.status-deleted {
+  background: #6b7280;
+  color: white;
+}
+
+/* Optional: Add a dot before the status text */
+.status-active::before,
+.status-inactive::before,
+.status-deleted::before {
+  content: "●";
+  margin-right: 6px;
+  font-size: 8px;
+  opacity: 0.8;
+}
+
+/* Keep original badges for backward compatibility (semi-transparent) */
 .badge-green {
   background: rgba(34, 197, 94, 0.1);
   color: #22c55e;

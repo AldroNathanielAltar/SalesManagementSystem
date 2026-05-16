@@ -184,6 +184,23 @@ const EMPTY = {
   confirmPassword: "",
 };
 
+// Helper function to generate username from first and last name
+function generateUsername(firstName, lastName) {
+  // Remove special characters and spaces, convert to lowercase
+  const cleanFirstName = firstName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const cleanLastName = lastName.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  // Generate username: firstname.lastname
+  let username = `${cleanFirstName}.${cleanLastName}`;
+
+  // Limit length to 50 characters
+  if (username.length > 50) {
+    username = username.slice(0, 50);
+  }
+
+  return username;
+}
+
 export default function RegisterPage() {
   const nav = useNavigate();
   const [form, setForm] = useState(EMPTY);
@@ -193,10 +210,32 @@ export default function RegisterPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [generatedUsername, setGeneratedUsername] = useState("");
+
+  // Generate username whenever first name or last name changes
+  const updateGeneratedUsername = (firstName, lastName) => {
+    if (firstName && lastName) {
+      const username = generateUsername(firstName, lastName);
+      setGeneratedUsername(username);
+    } else {
+      setGeneratedUsername("");
+    }
+  };
 
   function set(field) {
     return (e) => {
-      setForm((f) => ({ ...f, [field]: e.target.value }));
+      const newValue = e.target.value;
+      setForm((f) => {
+        const updatedForm = { ...f, [field]: newValue };
+        // Update generated username when firstName or lastName changes
+        if (field === "firstName" || field === "lastName") {
+          updateGeneratedUsername(
+            field === "firstName" ? newValue : updatedForm.firstName,
+            field === "lastName" ? newValue : updatedForm.lastName,
+          );
+        }
+        return updatedForm;
+      });
       setErrors((er) => ({ ...er, [field]: "" }));
       setServerError("");
     };
@@ -222,11 +261,16 @@ export default function RegisterPage() {
       setErrors(errs);
       return;
     }
+
+    // Generate username from first and last name
+    const username = generateUsername(form.firstName, form.lastName);
+
     setLoading(true);
     try {
       await registerWithEmail(form.email, form.password, {
         firstName: form.firstName,
         lastName: form.lastName,
+        username: username, // Pass the generated username
         full_name: `${form.firstName} ${form.lastName}`,
       });
       setSuccess(true);
@@ -382,7 +426,7 @@ export default function RegisterPage() {
               <Field
                 name="firstName"
                 label="First Name *"
-                placeholder="Juan"
+                placeholder="First Name"
                 svgIcon={svgUser}
                 value={form.firstName}
                 onChange={set("firstName")}
@@ -391,17 +435,63 @@ export default function RegisterPage() {
               <Field
                 name="lastName"
                 label="Last Name *"
-                placeholder="dela Cruz"
+                placeholder="Last Name"
                 svgIcon={svgUser}
                 value={form.lastName}
                 onChange={set("lastName")}
                 error={errors.lastName}
               />
             </div>
+
+            {/* Display generated username */}
+            {generatedUsername && (
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: "8px 12px",
+                  background: "rgba(124,58,237,0.15)",
+                  borderRadius: 8,
+                  border: "1px solid rgba(124,58,237,0.3)",
+                }}
+              >
+                <label
+                  style={{
+                    fontSize: 11,
+                    color: "#a78bfa",
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  Your Username will be:
+                </label>
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "#c4b5fd",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {generatedUsername}
+                </span>
+                <p
+                  style={{
+                    fontSize: 10,
+                    color: "#64748b",
+                    marginTop: 4,
+                    marginBottom: 0,
+                  }}
+                >
+                  Username is automatically generated from your first and last
+                  name.
+                </p>
+              </div>
+            )}
+
             <Field
               name="email"
               label="Email Address *"
-              placeholder="juan@hopeinc.com"
+              placeholder="youremail@gmail.com"
               svgIcon={svgEmail}
               value={form.email}
               onChange={set("email")}

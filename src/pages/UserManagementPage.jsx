@@ -3,7 +3,8 @@
  * - Activate / Deactivate user
  * - Promote user to ADMIN or SUPERADMIN (SUPERADMIN only for promoting to SUPERADMIN)
  * - SUPERADMIN rows are read-only with tooltip
- * - Loading skeleton, toast notifications, search + filter
+ * - Automatically handles user_module foreign key constraints
+ * - Uses PermissionsContext for access control
  */
 import { useState, useEffect, useCallback } from "react";
 import {
@@ -19,7 +20,7 @@ import {
   ArrowUp,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { useRights } from "../context/UserRightsContext";
+import { usePermissions } from "../context/PermissionsContext";
 import { supabase } from "../lib/supabaseClient";
 import Toast from "../components/ui/Toast";
 import ConfirmModal from "../components/ui/ConfirmModal";
@@ -34,11 +35,7 @@ const STATUS_BADGE = { ACTIVE: "badge-green", INACTIVE: "badge-red" };
 
 export default function UserManagementPage() {
   const { currentUser } = useAuth();
-  const { can } = useRights();
-
-  const userType = currentUser?.user_type || "USER";
-  const isSuperAdmin = userType === "SUPERADMIN";
-  const isAdmin = userType === "ADMIN" || isSuperAdmin;
+  const { hasPermission, isSuperAdmin, isAdmin } = usePermissions();
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +47,8 @@ export default function UserManagementPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [tooltip, setTooltip] = useState(null);
+
+  const canManageUsers = hasPermission("ADM_USER") || isSuperAdmin();
 
   const fetchUsers = useCallback(async (quiet = false) => {
     quiet ? setRefreshing(true) : setLoading(true);
@@ -64,26 +63,28 @@ export default function UserManagementPage() {
   }, []);
 
   useEffect(() => {
-    if (can("ADM_USER") || isAdmin) fetchUsers();
-  }, [fetchUsers, isAdmin]);
+    if (canManageUsers) fetchUsers();
+  }, [fetchUsers, canManageUsers]);
 
   function showToast(msg, type = "success") {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   }
 
-  /* ── Access guard (after all hooks) ── */
-  if (!can("ADM_USER") && !isAdmin) {
-    return (
-      <div className="um-blocked">
-        <Lock size={40} />
-        <h3>Access Restricted</h3>
-        <p>You need the ADM_USER right to access User Management.</p>
-      </div>
-    );
-  }
+  // Helper function to delete user_module records for a user
+  const deleteUserModuleRecords = async (userId) => {
+    const { error } = await supabase
+      .from("user_module")
+      .delete()
+      .eq("userid", userId);
 
-  /* ── Confirm actions ── */
+    if (error && !error.message.includes("does not exist")) {
+      console.warn("Error deleting user_module:", error);
+    }
+    return true;
+  };
+
+  /* ── Confirm actions with foreign key handling ── */
   async function handleConfirm() {
     if (!confirm) return;
     const { action, user } = confirm;
@@ -91,12 +92,27 @@ export default function UserManagementPage() {
     try {
       let updateData = {};
 
-      if (action === "activate") updateData = { record_status: "ACTIVE" };
-      if (action === "deactivate") updateData = { record_status: "INACTIVE" };
-      if (action === "promote-admin") updateData = { user_type: "ADMIN" };
-      if (action === "promote-superadmin")
+      if (action === "activate") {
+        updateData = { record_status: "ACTIVE" };
+      }
+
+      if (action === "deactivate") {
+        // When deactivating, also remove user_module permissions
+        await deleteUserModuleRecords(user.userid);
+        updateData = { record_status: "INACTIVE" };
+      }
+
+      if (action === "promote-admin") {
+        updateData = { user_type: "ADMIN" };
+      }
+
+      if (action === "promote-superadmin") {
         updateData = { user_type: "SUPERADMIN" };
-      if (action === "demote-user") updateData = { user_type: "USER" };
+      }
+
+      if (action === "demote-user") {
+        updateData = { user_type: "USER" };
+      }
 
       const { error } = await supabase
         .from("user")
@@ -114,7 +130,7 @@ export default function UserManagementPage() {
 
       const labels = {
         activate: `${user.username} has been activated.`,
-        deactivate: `${user.username} has been deactivated.`,
+        deactivate: `${user.username} has been deactivated and their permissions have been removed.`,
         "promote-admin": `${user.username} promoted to Admin. They must log out and back in for changes to take effect.`,
         "promote-superadmin": `${user.username} promoted to Super Admin. They must log out and back in for changes to take effect.`,
         "demote-user": `${user.username} demoted to User. They must log out and back in for changes to take effect.`,
@@ -150,7 +166,7 @@ export default function UserManagementPage() {
     if (!target) return false;
     if (target.userid === currentUser?.userid) return false; // can't act on self
     if (target.user_type === "SUPERADMIN") return false; // SUPERADMIN protected
-    return isAdmin;
+    return canManageUsers;
   }
 
   /* ── Confirm modal config per action ── */
@@ -185,12 +201,23 @@ export default function UserManagementPage() {
   function confirmMsg(action, username) {
     const msgs = {
       activate: `Activate "${username}"? They will regain access to the system.`,
-      deactivate: `Deactivate "${username}"? They will lose system access immediately.`,
+      deactivate: `Deactivate "${username}"? They will lose system access immediately. All their module permissions will be removed.`,
       "promote-admin": `Promote "${username}" to Admin? They will gain admin privileges.`,
       "promote-superadmin": `⚠️ Promote "${username}" to Super Admin? This gives them full unrestricted access. This action cannot be undone via the app.`,
       "demote-user": `Demote "${username}" to User? They will lose admin privileges.`,
     };
     return msgs[action] || "Confirm this action?";
+  }
+
+  /* ── Access guard ── */
+  if (!canManageUsers) {
+    return (
+      <div className="um-blocked">
+        <Lock size={40} />
+        <h3>Access Restricted</h3>
+        <p>You need administrator privileges to access User Management.</p>
+      </div>
+    );
   }
 
   return (
@@ -296,7 +323,7 @@ export default function UserManagementPage() {
       {/* Table */}
       {!loading && (
         <div className="table-wrap">
-          <table>
+          <table className="um-table">
             <thead>
               <tr>
                 <th>User</th>
@@ -329,43 +356,33 @@ export default function UserManagementPage() {
                     )}
 
                     {/* Avatar + name */}
-                    <td>
-                      <div className="um-user-cell">
-                        <div
-                          className={`um-avatar um-avatar-${u.user_type?.toLowerCase()}`}
+                    <td className="um-user-cell">
+                      <div
+                        className={`um-avatar um-avatar-${u.user_type?.toLowerCase()}`}
+                      >
+                        {(u.username || "U").slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <span
+                          style={{
+                            fontWeight: 600,
+                            color: "var(--text-primary)",
+                          }}
                         >
-                          {(u.username || "U").slice(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <span
-                            style={{
-                              fontWeight: 600,
-                              color: "var(--text-primary)",
-                            }}
-                          >
-                            {u.username || "—"}
-                          </span>
-                          {isSelf && <span className="um-you-badge">You</span>}
-                          {isProtected && (
-                            <Lock
-                              size={11}
-                              style={{ color: "var(--amber)", marginLeft: 6 }}
-                            />
-                          )}
-                        </div>
+                          {u.username || "—"}
+                        </span>
+                        {isSelf && <span className="um-you-badge">You</span>}
+                        {isProtected && (
+                          <Lock
+                            size={11}
+                            style={{ color: "var(--amber)", marginLeft: 6 }}
+                          />
+                        )}
                       </div>
                     </td>
 
                     {/* ID */}
-                    <td
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 11,
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      {u.userid?.slice(0, 8)}…
-                    </td>
+                    <td className="um-id-cell">{u.userid?.slice(0, 8)}…</td>
 
                     {/* Role badge */}
                     <td>
@@ -390,9 +407,7 @@ export default function UserManagementPage() {
                           {isProtected ? "🔒 Protected" : "— (You)"}
                         </span>
                       ) : (
-                        <div
-                          style={{ display: "flex", gap: 6, flexWrap: "wrap" }}
-                        >
+                        <div className="um-action-buttons">
                           {/* Activate / Deactivate */}
                           {u.record_status === "INACTIVE" && actable && (
                             <button
@@ -415,7 +430,7 @@ export default function UserManagementPage() {
                             </button>
                           )}
 
-                          {/* ── Promote / Demote ── */}
+                          {/* Promote / Demote */}
                           {actable && u.user_type === "USER" && (
                             <button
                               className="btn btn-secondary btn-sm"
@@ -428,7 +443,7 @@ export default function UserManagementPage() {
                             </button>
                           )}
                           {actable &&
-                            isSuperAdmin &&
+                            isSuperAdmin() &&
                             u.user_type === "USER" && (
                               <button
                                 className="btn btn-warning btn-sm"
@@ -444,7 +459,7 @@ export default function UserManagementPage() {
                               </button>
                             )}
                           {actable &&
-                            isSuperAdmin &&
+                            isSuperAdmin() &&
                             u.user_type === "ADMIN" && (
                               <>
                                 <button
@@ -474,8 +489,8 @@ export default function UserManagementPage() {
                               </>
                             )}
                           {actable &&
-                            isAdmin &&
-                            !isSuperAdmin &&
+                            isAdmin() &&
+                            !isSuperAdmin() &&
                             u.user_type === "ADMIN" && (
                               <button
                                 className="btn btn-secondary btn-sm"
