@@ -48,6 +48,9 @@ export default function SalesListPage() {
   const [sortField, setSortField] = useState("salesDate");
   const [sortDirection, setSortDirection] = useState("desc");
 
+  // Check if user can see stamp (Superadmin or Admin)
+  const canSeeStamp = isSuperAdmin() || currentUser?.user_type === "ADMIN";
+
   // Handle sort click
   const handleSort = (field) => {
     if (sortField === field) {
@@ -165,10 +168,8 @@ export default function SalesListPage() {
 
   // Function to refresh data after actions (without page refresh)
   const refreshData = async () => {
-    // Reload sales data from AppContext
     await loadSales();
 
-    // Manually refresh the formattedSales state
     try {
       let query = supabase
         .from("sales")
@@ -211,7 +212,6 @@ export default function SalesListPage() {
 
       setFormattedSales(formatted);
 
-      // Also recalculate metrics for the new transaction
       const transNos = formatted.map((s) => s.transNo);
       if (transNos.length > 0) {
         const { data: details } = await supabase
@@ -269,7 +269,6 @@ export default function SalesListPage() {
       return matchSearch && matchFrom && matchTo;
     });
 
-    // Apply sorting
     result.sort((a, b) => {
       let aVal = a[sortField];
       let bVal = b[sortField];
@@ -441,7 +440,7 @@ export default function SalesListPage() {
                   Total <SortIcon field="total" />
                 </th>
                 {(isAdmin() || isSuperAdmin()) && <th>Status</th>}
-                {(isAdmin() || isSuperAdmin()) && <th>Last Modified</th>}
+                {canSeeStamp && <th>Last Modified</th>}
                 <th>Actions</th>
               </tr>
             </thead>
@@ -484,7 +483,7 @@ export default function SalesListPage() {
                         </span>
                       </td>
                     )}
-                    {(isAdmin() || isSuperAdmin()) && (
+                    {canSeeStamp && (
                       <td className="stamp-cell">
                         {s.stamp ? new Date(s.stamp).toLocaleString() : "—"}
                       </td>
@@ -531,10 +530,7 @@ export default function SalesListPage() {
               })}
               {filteredAndSorted.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={isAdmin() || isSuperAdmin() ? 9 : 7}
-                    className="empty-row"
-                  >
+                  <td colSpan={canSeeStamp ? 9 : 8} className="empty-row">
                     No transactions found.
                   </td>
                 </tr>

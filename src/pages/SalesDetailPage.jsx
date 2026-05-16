@@ -12,6 +12,7 @@ import {
 import { supabase } from "../lib/supabaseClient";
 import { useApp } from "../context/AppContext";
 import { usePermissions } from "../context/PermissionsContext";
+import { useAuth } from "../context/AuthContext";
 import Portal from "../components/ui/Portal";
 import "./SalesDetailPage.css";
 
@@ -20,6 +21,7 @@ export default function SalesDetailPage() {
   const navigate = useNavigate();
   const { getCurrentPrice, products, loadSales } = useApp();
   const { canAdd, canEdit, canDelete, isSuperAdmin } = usePermissions();
+  const { currentUser } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [sale, setSale] = useState(null);
@@ -37,6 +39,10 @@ export default function SalesDetailPage() {
   const [addLoading, setAddLoading] = useState(false);
   const [editQuantity, setEditQuantity] = useState(1);
   const [editLoading, setEditLoading] = useState(false);
+
+  // Check if user can see Last Modified (Superadmin or Admin)
+  const userType = currentUser?.user_type;
+  const showLastModified = userType === "SUPERADMIN" || userType === "ADMIN";
 
   // Load price map once for performance
   useEffect(() => {
@@ -60,7 +66,7 @@ export default function SalesDetailPage() {
   // Optimized single query to load all data
   const loadSaleDetailsData = useCallback(async () => {
     try {
-      // Single query with all joins - MUCH FASTER
+      // Single query with all joins - includes stamp from salesdetail
       const { data: saleData, error: saleError } = await supabase
         .from("sales")
         .select(
@@ -78,6 +84,7 @@ export default function SalesDetailPage() {
             prodcode,
             quantity,
             record_status,
+            stamp,
             product:prodcode (prodcode, description, unit)
           )
         `,
@@ -109,7 +116,7 @@ export default function SalesDetailPage() {
         stamp: saleData.stamp,
       });
 
-      // Process line items with prices
+      // Process line items with prices and stamps
       const details = saleData.salesdetail || [];
       const itemsWithPrices = details.map((item, index) => {
         const unitPrice = priceMap.get(item.prodcode) || 0;
@@ -125,6 +132,7 @@ export default function SalesDetailPage() {
           quantity: quantity,
           unitPrice: unitPrice,
           total: total,
+          stamp: item.stamp,
         };
       });
 
@@ -200,7 +208,10 @@ export default function SalesDetailPage() {
     try {
       const { error: updateError } = await supabase
         .from("salesdetail")
-        .update({ quantity: editQuantity })
+        .update({
+          quantity: editQuantity,
+          stamp: new Date().toISOString(),
+        })
         .eq("transno", transNo)
         .eq("prodcode", editingItem.prodcode);
 
@@ -224,7 +235,10 @@ export default function SalesDetailPage() {
     try {
       const { error: deleteError } = await supabase
         .from("salesdetail")
-        .update({ record_status: "DELETED" })
+        .update({
+          record_status: "DELETED",
+          stamp: new Date().toISOString(),
+        })
         .eq("transno", transNo)
         .eq("prodcode", prodcode);
 
@@ -314,6 +328,14 @@ export default function SalesDetailPage() {
               {sale.record_status}
             </span>
           </div>
+          {showLastModified && (
+            <div className="detail-group">
+              <label>Last Modified:</label>
+              <span>
+                {sale.stamp ? new Date(sale.stamp).toLocaleString() : "—"}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -382,6 +404,7 @@ export default function SalesDetailPage() {
                 <th style={{ textAlign: "right" }}>Quantity</th>
                 <th style={{ textAlign: "right" }}>Unit Price</th>
                 <th style={{ textAlign: "right" }}>Total</th>
+                {showLastModified && <th>Last Modified</th>}
                 {canModify() && (
                   <th style={{ textAlign: "center" }}>Actions</th>
                 )}
@@ -400,6 +423,17 @@ export default function SalesDetailPage() {
                   <td style={{ textAlign: "right", fontWeight: 600 }}>
                     ${item.total.toLocaleString()}
                   </td>
+                  {showLastModified && (
+                    <td
+                      style={{
+                        fontSize: 11,
+                        color: "var(--text-muted)",
+                        fontFamily: "var(--font-mono)",
+                      }}
+                    >
+                      {item.stamp ? new Date(item.stamp).toLocaleString() : "—"}
+                    </td>
+                  )}
                   {canModify() && (
                     <td style={{ textAlign: "center" }}>
                       <div
@@ -439,7 +473,15 @@ export default function SalesDetailPage() {
               {lineItems.length === 0 && (
                 <tr>
                   <td
-                    colSpan={canModify() ? 7 : 6}
+                    colSpan={
+                      canModify()
+                        ? showLastModified
+                          ? 8
+                          : 7
+                        : showLastModified
+                          ? 7
+                          : 6
+                    }
                     style={{ textAlign: "center", padding: 32 }}
                   >
                     No line items found for this transaction.
@@ -449,7 +491,10 @@ export default function SalesDetailPage() {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan="5" style={{ textAlign: "right", fontWeight: 600 }}>
+                <td
+                  colSpan={showLastModified ? 5 : 4}
+                  style={{ textAlign: "right", fontWeight: 600 }}
+                >
                   Grand Total ({totalItems} items):
                 </td>
                 <td
@@ -462,7 +507,6 @@ export default function SalesDetailPage() {
                 >
                   ${grandTotal.toLocaleString()}
                 </td>
-                {canModify() && <td></td>}
               </tr>
             </tfoot>
           </table>
