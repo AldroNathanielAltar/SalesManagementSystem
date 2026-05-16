@@ -1,5 +1,9 @@
 
-
+-- ============================================================
+-- PR    : db/trigger-cascade
+-- Sprint: 2
+-- Author: cydencenteno-byte
+-- ============================================================
 CREATE OR REPLACE FUNCTION cascade_sales_status()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
