@@ -1,6 +1,8 @@
--- ============================================
--- PR-04: Verify Seed Data & Row Count Checks
--- ============================================
+-- ============================================================
+-- PR    : db/verify-seed
+-- Sprint: 1
+-- Author: cydencenteno-byte
+-- ============================================================
 
 -- Row Count Checks
 SELECT 'employee' AS table_name, COUNT(*) AS row_count FROM employee
