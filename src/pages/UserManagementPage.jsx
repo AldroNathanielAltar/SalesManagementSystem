@@ -5,6 +5,7 @@
  * - SUPERADMIN rows are read-only with tooltip
  * - Automatically handles user_module foreign key constraints
  * - Uses PermissionsContext for access control
+ * - Includes notifications for all user actions
  */
 import { useState, useEffect, useCallback } from "react";
 import {
@@ -21,6 +22,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { usePermissions } from "../context/PermissionsContext";
+import { useApp } from "../context/AppContext";
 import { supabase } from "../lib/supabaseClient";
 import Toast from "../components/ui/Toast";
 import ConfirmModal from "../components/ui/ConfirmModal";
@@ -36,6 +38,7 @@ const STATUS_BADGE = { ACTIVE: "badge-green", INACTIVE: "badge-red" };
 export default function UserManagementPage() {
   const { currentUser } = useAuth();
   const { hasPermission, isSuperAdmin, isAdmin } = usePermissions();
+  const { addNotification } = useApp();
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -84,41 +87,46 @@ export default function UserManagementPage() {
     return true;
   };
 
-  /* ── Confirm actions with foreign key handling ── */
+  /* ── Confirm actions with foreign key handling and notifications ── */
   async function handleConfirm() {
     if (!confirm) return;
     const { action, user } = confirm;
     setActionLoading(true);
     try {
       let updateData = {};
+      let notificationMessage = "";
 
       if (action === "activate") {
         updateData = { record_status: "ACTIVE" };
+        notificationMessage = `✅ User ${user.username} was activated`;
       }
 
       if (action === "deactivate") {
-        // When deactivating, also remove user_module permissions
         await deleteUserModuleRecords(user.userid);
         updateData = { record_status: "INACTIVE" };
+        notificationMessage = `⛔ User ${user.username} was deactivated`;
       }
 
       if (action === "promote-admin") {
         updateData = { user_type: "ADMIN" };
+        notificationMessage = `👑 User ${user.username} was promoted to Admin`;
       }
 
       if (action === "promote-superadmin") {
         updateData = { user_type: "SUPERADMIN" };
+        notificationMessage = `👑 User ${user.username} was promoted to Super Admin`;
       }
 
       if (action === "demote-user") {
         updateData = { user_type: "USER" };
+        notificationMessage = `⬇️ User ${user.username} was demoted to User`;
       }
 
       const { error } = await supabase
         .from("user")
         .update(updateData)
         .eq("userid", user.userid)
-        .neq("user_type", "SUPERADMIN"); // never touch SUPERADMIN rows via app
+        .neq("user_type", "SUPERADMIN");
 
       if (error) throw error;
 
@@ -127,6 +135,8 @@ export default function UserManagementPage() {
           u.userid === user.userid ? { ...u, ...updateData } : u,
         ),
       );
+
+      addNotification(notificationMessage, "info");
 
       const labels = {
         activate: `${user.username} has been activated.`,
@@ -164,8 +174,8 @@ export default function UserManagementPage() {
 
   function canAct(target) {
     if (!target) return false;
-    if (target.userid === currentUser?.userid) return false; // can't act on self
-    if (target.user_type === "SUPERADMIN") return false; // SUPERADMIN protected
+    if (target.userid === currentUser?.userid) return false;
+    if (target.user_type === "SUPERADMIN") return false;
     return canManageUsers;
   }
 
@@ -354,8 +364,6 @@ export default function UserManagementPage() {
                         🔒 SUPERADMIN accounts cannot be modified
                       </div>
                     )}
-
-                    {/* Avatar + name */}
                     <td className="um-user-cell">
                       <div
                         className={`um-avatar um-avatar-${u.user_type?.toLowerCase()}`}
@@ -380,18 +388,12 @@ export default function UserManagementPage() {
                         )}
                       </div>
                     </td>
-
-                    {/* ID */}
                     <td className="um-id-cell">{u.userid?.slice(0, 8)}…</td>
-
-                    {/* Role badge */}
                     <td>
                       <span className={`badge ${tb.cls}`}>
                         <TypeIcon size={10} /> {tb.label}
                       </span>
                     </td>
-
-                    {/* Status badge */}
                     <td>
                       <span
                         className={`badge ${STATUS_BADGE[u.record_status] || "badge-gray"}`}
@@ -399,8 +401,6 @@ export default function UserManagementPage() {
                         {u.record_status === "ACTIVE" ? "Active" : "Inactive"}
                       </span>
                     </td>
-
-                    {/* Actions */}
                     <td>
                       {isProtected || isSelf ? (
                         <span className="um-protected-label">
@@ -408,7 +408,6 @@ export default function UserManagementPage() {
                         </span>
                       ) : (
                         <div className="um-action-buttons">
-                          {/* Activate / Deactivate */}
                           {u.record_status === "INACTIVE" && actable && (
                             <button
                               className="btn btn-primary btn-sm"
@@ -429,8 +428,6 @@ export default function UserManagementPage() {
                               <XCircle size={13} /> Deactivate
                             </button>
                           )}
-
-                          {/* Promote / Demote */}
                           {actable && u.user_type === "USER" && (
                             <button
                               className="btn btn-secondary btn-sm"
@@ -502,7 +499,6 @@ export default function UserManagementPage() {
                                 <User size={13} /> Make User
                               </button>
                             )}
-
                           {!actable && (
                             <span className="um-protected-label">
                               No permission
@@ -514,7 +510,6 @@ export default function UserManagementPage() {
                   </tr>
                 );
               })}
-
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={5} className="um-empty">
