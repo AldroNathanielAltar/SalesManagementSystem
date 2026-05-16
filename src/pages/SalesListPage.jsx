@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { useAuth } from "../context/AuthContext";
+import { usePermissions } from "../context/PermissionsContext";
 import { supabase } from "../lib/supabaseClient";
 import AddSaleModal from "./modals/AddSaleModal";
 import EditSaleModal from "./modals/EditSaleModal";
@@ -28,8 +29,10 @@ const RS_BADGE = {
 };
 
 export default function SalesListPage() {
-  const { sales, loading: appLoading, loadSales } = useApp(); // Changed: reloadSales -> loadSales
+  const { sales, loading: appLoading, loadSales } = useApp();
   const { currentUser } = useAuth();
+  const { canAdd, canEdit, canDelete, isAdmin, isSuperAdmin } =
+    usePermissions();
   const nav = useNavigate();
 
   const [search, setSearch] = useState("");
@@ -44,9 +47,6 @@ export default function SalesListPage() {
   // Sorting state
   const [sortField, setSortField] = useState("salesDate");
   const [sortDirection, setSortDirection] = useState("desc");
-
-  const isSuperAdmin = currentUser?.user_type === "SUPERADMIN";
-  const isAdmin = currentUser?.user_type === "ADMIN" || isSuperAdmin;
 
   // Handle sort click
   const handleSort = (field) => {
@@ -91,7 +91,7 @@ export default function SalesListPage() {
           )
           .order("salesdate", { ascending: false });
 
-        if (!isAdmin) {
+        if (!isAdmin() && !isSuperAdmin()) {
           query = query.eq("record_status", "ACTIVE");
         }
 
@@ -115,6 +115,44 @@ export default function SalesListPage() {
         }));
 
         setFormattedSales(formatted);
+
+        // Calculate metrics after loading sales
+        const transNos = formatted.map((s) => s.transNo);
+        if (transNos.length > 0) {
+          const { data: details } = await supabase
+            .from("salesdetail")
+            .select("transno, prodcode, quantity, record_status")
+            .in("transno", transNos)
+            .eq("record_status", "ACTIVE");
+
+          const { data: prices } = await supabase
+            .from("pricehist")
+            .select("prodcode, unitprice")
+            .order("effdate", { ascending: false });
+
+          const priceMap = new Map();
+          prices?.forEach((p) => {
+            if (!priceMap.has(p.prodcode)) {
+              priceMap.set(p.prodcode, Number(p.unitprice) || 0);
+            }
+          });
+
+          const metrics = {};
+          details?.forEach((detail) => {
+            const transno = detail.transno;
+            const quantity = Number(detail.quantity) || 0;
+            const price = priceMap.get(detail.prodcode) || 0;
+            const revenue = quantity * price;
+
+            if (!metrics[transno]) {
+              metrics[transno] = { items: 0, total: 0 };
+            }
+            metrics[transno].items += 1;
+            metrics[transno].total += revenue;
+          });
+
+          setSalesMetrics(metrics);
+        }
       } catch (err) {
         console.error("Error loading sales:", err);
       } finally {
@@ -123,92 +161,95 @@ export default function SalesListPage() {
     };
 
     loadSalesData();
-  }, [isAdmin, appLoading]);
+  }, [isAdmin, isSuperAdmin, appLoading]);
 
-  // Calculate items count and total revenue for each transaction
-  useEffect(() => {
-    const calculateMetrics = async () => {
-      if (!formattedSales.length) return;
-
-      const transNos = formattedSales.map((s) => s.transNo);
-
-      const { data: details } = await supabase
-        .from("salesdetail")
-        .select("transno, prodcode, quantity, record_status")
-        .in("transno", transNos)
-        .eq("record_status", "ACTIVE");
-
-      const { data: prices } = await supabase
-        .from("pricehist")
-        .select("prodcode, unitprice")
-        .order("effdate", { ascending: false });
-
-      const priceMap = new Map();
-      prices?.forEach((p) => {
-        if (!priceMap.has(p.prodcode)) {
-          priceMap.set(p.prodcode, Number(p.unitprice) || 0);
-        }
-      });
-
-      const metrics = {};
-      details?.forEach((detail) => {
-        const transno = detail.transno;
-        const quantity = Number(detail.quantity) || 0;
-        const price = priceMap.get(detail.prodcode) || 0;
-        const revenue = quantity * price;
-
-        if (!metrics[transno]) {
-          metrics[transno] = { items: 0, total: 0 };
-        }
-        metrics[transno].items += 1;
-        metrics[transno].total += revenue;
-      });
-
-      setSalesMetrics(metrics);
-    };
-
-    calculateMetrics();
-  }, [formattedSales]);
-
-  // Function to refresh data after actions
+  // Function to refresh data after actions (without page refresh)
   const refreshData = async () => {
-    await loadSales(); // Call loadSales from AppContext
-    // Also refresh the local formatted sales
-    const transNos = formattedSales.map((s) => s.transNo);
-    if (transNos.length > 0) {
-      const { data: details } = await supabase
-        .from("salesdetail")
-        .select("transno, prodcode, quantity, record_status")
-        .in("transno", transNos)
-        .eq("record_status", "ACTIVE");
+    // Reload sales data from AppContext
+    await loadSales();
 
-      const { data: prices } = await supabase
-        .from("pricehist")
-        .select("prodcode, unitprice")
-        .order("effdate", { ascending: false });
+    // Manually refresh the formattedSales state
+    try {
+      let query = supabase
+        .from("sales")
+        .select(
+          `
+          transno,
+          salesdate,
+          custno,
+          empno,
+          record_status,
+          stamp,
+          customer:custno (custname),
+          employee:empno (firstname, lastname)
+        `,
+        )
+        .order("salesdate", { ascending: false });
 
-      const priceMap = new Map();
-      prices?.forEach((p) => {
-        if (!priceMap.has(p.prodcode)) {
-          priceMap.set(p.prodcode, Number(p.unitprice) || 0);
-        }
-      });
+      if (!isAdmin() && !isSuperAdmin()) {
+        query = query.eq("record_status", "ACTIVE");
+      }
 
-      const metrics = {};
-      details?.forEach((detail) => {
-        const transno = detail.transno;
-        const quantity = Number(detail.quantity) || 0;
-        const price = priceMap.get(detail.prodcode) || 0;
-        const revenue = quantity * price;
+      const { data, error } = await query;
+      if (error) throw error;
 
-        if (!metrics[transno]) {
-          metrics[transno] = { items: 0, total: 0 };
-        }
-        metrics[transno].items += 1;
-        metrics[transno].total += revenue;
-      });
+      const formatted = (data || []).map((s) => ({
+        transNo: s.transno,
+        salesDate: s.salesdate,
+        displayDate: s.salesdate
+          ? new Date(s.salesdate).toLocaleDateString()
+          : "—",
+        custno: s.custno,
+        custname: s.customer?.custname || "Unknown",
+        empno: s.empno,
+        empname: s.employee
+          ? `${s.employee.lastname}, ${s.employee.firstname}`
+          : "Unknown",
+        record_status: s.record_status || "ACTIVE",
+        stamp: s.stamp,
+      }));
 
-      setSalesMetrics(metrics);
+      setFormattedSales(formatted);
+
+      // Also recalculate metrics for the new transaction
+      const transNos = formatted.map((s) => s.transNo);
+      if (transNos.length > 0) {
+        const { data: details } = await supabase
+          .from("salesdetail")
+          .select("transno, prodcode, quantity, record_status")
+          .in("transno", transNos)
+          .eq("record_status", "ACTIVE");
+
+        const { data: prices } = await supabase
+          .from("pricehist")
+          .select("prodcode, unitprice")
+          .order("effdate", { ascending: false });
+
+        const priceMap = new Map();
+        prices?.forEach((p) => {
+          if (!priceMap.has(p.prodcode)) {
+            priceMap.set(p.prodcode, Number(p.unitprice) || 0);
+          }
+        });
+
+        const metrics = {};
+        details?.forEach((detail) => {
+          const transno = detail.transno;
+          const quantity = Number(detail.quantity) || 0;
+          const price = priceMap.get(detail.prodcode) || 0;
+          const revenue = quantity * price;
+
+          if (!metrics[transno]) {
+            metrics[transno] = { items: 0, total: 0 };
+          }
+          metrics[transno].items += 1;
+          metrics[transno].total += revenue;
+        });
+
+        setSalesMetrics(metrics);
+      }
+    } catch (err) {
+      console.error("Error refreshing data:", err);
     }
   };
 
@@ -287,7 +328,7 @@ export default function SalesListPage() {
           <p className="slsv">{loading || appLoading ? "…" : activeCount}</p>
           <p className="slsl">Active</p>
         </div>
-        {isAdmin && (
+        {(isAdmin() || isSuperAdmin()) && (
           <div className="sl-sum-card warn">
             <p className="slsv">
               {loading || appLoading ? "…" : inactiveCount}
@@ -356,7 +397,7 @@ export default function SalesListPage() {
               <X size={14} /> Clear Filters
             </button>
           )}
-          {(isAdmin || isSuperAdmin) && (
+          {(canAdd() || isSuperAdmin()) && (
             <button className="btn btn-primary" onClick={() => setModal("add")}>
               <Plus size={15} /> Add Transaction
             </button>
@@ -399,8 +440,8 @@ export default function SalesListPage() {
                 <th className="sortable" onClick={() => handleSort("total")}>
                   Total <SortIcon field="total" />
                 </th>
-                {isAdmin && <th>Status</th>}
-                {isAdmin && <th>Last Modified</th>}
+                {(isAdmin() || isSuperAdmin()) && <th>Status</th>}
+                {(isAdmin() || isSuperAdmin()) && <th>Last Modified</th>}
                 <th>Actions</th>
               </tr>
             </thead>
@@ -434,7 +475,7 @@ export default function SalesListPage() {
                     <td style={{ fontWeight: 600 }}>
                       ${metric.total.toLocaleString()}
                     </td>
-                    {isAdmin && (
+                    {(isAdmin() || isSuperAdmin()) && (
                       <td>
                         <span
                           className={`badge ${RS_BADGE[s.record_status] || "badge-gray"}`}
@@ -443,7 +484,7 @@ export default function SalesListPage() {
                         </span>
                       </td>
                     )}
-                    {isAdmin && (
+                    {(isAdmin() || isSuperAdmin()) && (
                       <td className="stamp-cell">
                         {s.stamp ? new Date(s.stamp).toLocaleString() : "—"}
                       </td>
@@ -457,7 +498,7 @@ export default function SalesListPage() {
                         >
                           <Eye size={14} />
                         </button>
-                        {(isAdmin || isSuperAdmin) &&
+                        {(canEdit() || isSuperAdmin()) &&
                           s.record_status === "ACTIVE" && (
                             <button
                               className="btn-icon"
@@ -470,18 +511,19 @@ export default function SalesListPage() {
                               <Pencil size={14} />
                             </button>
                           )}
-                        {isSuperAdmin && s.record_status === "ACTIVE" && (
-                          <button
-                            className="btn-icon delete-btn"
-                            title="Soft-delete"
-                            onClick={() => {
-                              setSelTrans(s);
-                              setModal("delete");
-                            }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
+                        {(canDelete() || isSuperAdmin()) &&
+                          s.record_status === "ACTIVE" && (
+                            <button
+                              className="btn-icon delete-btn"
+                              title="Soft-delete"
+                              onClick={() => {
+                                setSelTrans(s);
+                                setModal("delete");
+                              }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
                       </div>
                     </td>
                   </tr>
@@ -489,7 +531,10 @@ export default function SalesListPage() {
               })}
               {filteredAndSorted.length === 0 && (
                 <tr>
-                  <td colSpan={isAdmin ? 9 : 7} className="empty-row">
+                  <td
+                    colSpan={isAdmin() || isSuperAdmin() ? 9 : 7}
+                    className="empty-row"
+                  >
                     No transactions found.
                   </td>
                 </tr>

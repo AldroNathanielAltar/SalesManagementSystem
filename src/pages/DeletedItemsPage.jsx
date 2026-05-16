@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { RotateCcw, Trash2, ShieldOff, Loader2 } from "lucide-react";
+import { RotateCcw, Trash2, ShieldOff, Loader2, RefreshCw } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabaseClient";
@@ -7,7 +7,7 @@ import ConfirmModal from "../components/ui/ConfirmModal";
 import "./DeletedItemsPage.css";
 
 export default function DeletedItemsPage() {
-  const { sales, salesDetail, loading: appLoading, reloadAll } = useApp();
+  const { reloadAll } = useApp();
   const { currentUser } = useAuth();
   const [tab, setTab] = useState("transactions");
   const [confirm, setConfirm] = useState(null);
@@ -22,7 +22,7 @@ export default function DeletedItemsPage() {
   if (!isSuperAdmin) {
     return (
       <div className="di-blocked">
-        <ShieldOff size={40} style={{ color: "var(--text-muted)" }} />
+        <ShieldOff size={48} />
         <h3>Access Restricted</h3>
         <p>Deleted Items is only visible to Super Admin users.</p>
       </div>
@@ -33,96 +33,119 @@ export default function DeletedItemsPage() {
   const fetchDeletedItems = async () => {
     setLoading(true);
     try {
-      // Fetch deleted sales (record_status = 'DELETED' or 'INACTIVE')
+      // STEP 1: Fetch deleted sales
       const { data: deletedSalesData, error: salesError } = await supabase
         .from("sales")
-        .select(
-          `
-          transno,
-          salesdate,
-          custno,
-          empno,
-          record_status,
-          stamp,
-          customer:custno (
-            custno,
-            custname
-          ),
-          employee:empno (
-            empno,
-            firstname,
-            lastname
-          )
-        `,
-        )
+        .select("*")
         .in("record_status", ["DELETED", "INACTIVE"]);
 
       if (salesError) throw salesError;
 
-      // Fetch deleted line items
-      const { data: deletedLinesData, error: linesError } = await supabase
-        .from("salesdetail")
-        .select(
-          `
-          id,
-          transno,
-          prodcode,
-          quantity,
-          record_status,
-          stamp,
-          product:prodcode (
-            prodcode,
-            description,
-            unit
-          )
-        `,
-        )
-        .in("record_status", ["DELETED", "INACTIVE"]);
+      // STEP 2: Fetch customer and employee names separately
+      let formattedSales = [];
 
-      if (linesError) throw linesError;
+      if (deletedSalesData && deletedSalesData.length > 0) {
+        const customerIds = [
+          ...new Set(deletedSalesData.map((s) => s.custno).filter(Boolean)),
+        ];
+        const employeeIds = [
+          ...new Set(deletedSalesData.map((s) => s.empno).filter(Boolean)),
+        ];
 
-      // Get prices for line items from pricehist
-      const { data: priceData } = await supabase
-        .from("pricehist")
-        .select("prodcode, unitprice")
-        .order("effdate", { ascending: false });
-
-      const priceMap = new Map();
-      priceData?.forEach((price) => {
-        if (!priceMap.has(price.prodcode)) {
-          priceMap.set(price.prodcode, Number(price.unitprice) || 0);
+        // Fetch customer names
+        let customerMap = new Map();
+        if (customerIds.length > 0) {
+          const { data: customers } = await supabase
+            .from("customer")
+            .select("custno, custname")
+            .in("custno", customerIds);
+          customers?.forEach((c) => customerMap.set(c.custno, c.custname));
         }
-      });
 
-      // Format deleted sales
-      const formattedSales = (deletedSalesData || []).map((sale) => ({
-        transno: sale.transno,
-        salesdate: sale.salesdate,
-        custno: sale.custno,
-        custname: sale.customer?.custname || "Unknown",
-        empno: sale.empno,
-        empname: sale.employee
-          ? `${sale.employee.lastname}, ${sale.employee.firstname}`
-          : "Unknown",
-        record_status: sale.record_status,
-        stamp: sale.stamp,
-      }));
+        // Fetch employee names
+        let employeeMap = new Map();
+        if (employeeIds.length > 0) {
+          const { data: employees } = await supabase
+            .from("employee")
+            .select("empno, firstname, lastname")
+            .in("empno", employeeIds);
+          employees?.forEach((e) =>
+            employeeMap.set(e.empno, `${e.lastname}, ${e.firstname}`),
+          );
+        }
 
-      // Format deleted line items
-      const formattedLines = (deletedLinesData || []).map((line) => ({
-        id: line.id,
-        transno: line.transno,
-        prodcode: line.prodcode,
-        description: line.product?.description || line.prodcode,
-        unit: line.product?.unit,
-        quantity: Number(line.quantity) || 0,
-        unit_price: priceMap.get(line.prodcode) || 0,
-        record_status: line.record_status,
-        stamp: line.stamp,
-      }));
+        // Format sales
+        formattedSales = deletedSalesData.map((sale) => ({
+          transno: sale.transno,
+          salesdate: sale.salesdate,
+          custno: sale.custno,
+          custname: customerMap.get(sale.custno) || "Unknown",
+          empno: sale.empno,
+          empname: employeeMap.get(sale.empno) || "Unknown",
+          record_status: sale.record_status,
+          stamp: sale.stamp,
+        }));
+      }
 
       setDeletedSales(formattedSales);
-      setDeletedLines(formattedLines);
+
+      // STEP 3: Fetch deleted line items (no 'id' column, use composite key)
+      const { data: deletedLinesData, error: linesError } = await supabase
+        .from("salesdetail")
+        .select("*")
+        .in("record_status", ["DELETED", "INACTIVE"]);
+
+      if (!linesError && deletedLinesData && deletedLinesData.length > 0) {
+        // Get product codes
+        const productCodes = [
+          ...new Set(deletedLinesData.map((l) => l.prodcode).filter(Boolean)),
+        ];
+
+        // Fetch product descriptions
+        let productMap = new Map();
+        if (productCodes.length > 0) {
+          const { data: products } = await supabase
+            .from("product")
+            .select("prodcode, description, unit")
+            .in("prodcode", productCodes);
+          products?.forEach((p) => productMap.set(p.prodcode, p));
+        }
+
+        // Get prices
+        const { data: priceData } = await supabase
+          .from("pricehist")
+          .select("prodcode, unitprice")
+          .order("effdate", { ascending: false });
+
+        const priceMap = new Map();
+        priceData?.forEach((price) => {
+          if (!priceMap.has(price.prodcode)) {
+            priceMap.set(price.prodcode, Number(price.unitprice) || 0);
+          }
+        });
+
+        // Use composite key (transno + prodcode) as unique identifier
+        const formattedLines = deletedLinesData.map((line, index) => {
+          const product = productMap.get(line.prodcode);
+          const unitPrice = priceMap.get(line.prodcode) || 0;
+          return {
+            key: `${line.transno}-${line.prodcode}-${index}`,
+            transno: line.transno,
+            prodcode: line.prodcode,
+            description: product?.description || line.prodcode,
+            unit: product?.unit,
+            quantity: Number(line.quantity) || 0,
+            unit_price: unitPrice,
+            total: (Number(line.quantity) || 0) * unitPrice,
+            record_status: line.record_status,
+            stamp: line.stamp,
+          };
+        });
+
+        setDeletedLines(formattedLines);
+      } else {
+        setDeletedLines([]);
+      }
     } catch (err) {
       console.error("Error fetching deleted items:", err);
     } finally {
@@ -167,20 +190,21 @@ export default function DeletedItemsPage() {
     }
   }
 
-  // Recover a line item
-  async function handleRecoverLine(lineId) {
+  // Recover a line item (using transno and prodcode - no 'id' column)
+  async function handleRecoverLine(transno, prodcode) {
     setActionLoading(true);
     try {
       const { error } = await supabase
         .from("salesdetail")
         .update({ record_status: "ACTIVE" })
-        .eq("id", lineId);
+        .eq("transno", transno)
+        .eq("prodcode", prodcode);
 
       if (error) throw error;
 
       await fetchDeletedItems();
       await reloadAll();
-      alert(`Line item recovered successfully!`);
+      alert(`Line item ${prodcode} recovered successfully!`);
     } catch (err) {
       alert(err.message || "Failed to recover line item");
     } finally {
@@ -192,7 +216,7 @@ export default function DeletedItemsPage() {
   // Permanently delete a sale (hard delete - superadmin only)
   async function handlePermanentDeleteSale(transno) {
     if (
-      !confirm(
+      !window.confirm(
         "⚠️ WARNING: This will PERMANENTLY delete this transaction. This action CANNOT be undone. Are you sure?",
       )
     )
@@ -226,11 +250,11 @@ export default function DeletedItemsPage() {
     }
   }
 
-  // Permanently delete a line item
-  async function handlePermanentDeleteLine(lineId) {
+  // Permanently delete a line item (using transno and prodcode)
+  async function handlePermanentDeleteLine(transno, prodcode) {
     if (
-      !confirm(
-        "⚠️ WARNING: This will PERMANENTLY delete this line item. This action CANNOT be undone. Are you sure?",
+      !window.confirm(
+        `⚠️ WARNING: This will PERMANENTLY delete line item ${prodcode}. This action CANNOT be undone. Are you sure?`,
       )
     )
       return;
@@ -240,13 +264,14 @@ export default function DeletedItemsPage() {
       const { error } = await supabase
         .from("salesdetail")
         .delete()
-        .eq("id", lineId);
+        .eq("transno", transno)
+        .eq("prodcode", prodcode);
 
       if (error) throw error;
 
       await fetchDeletedItems();
       await reloadAll();
-      alert(`Line item permanently deleted.`);
+      alert(`Line item ${prodcode} permanently deleted.`);
     } catch (err) {
       alert(err.message || "Failed to delete line item");
     } finally {
@@ -300,7 +325,7 @@ export default function DeletedItemsPage() {
         </button>
       </div>
 
-      {(loading || appLoading) && (
+      {loading && (
         <div
           style={{
             display: "flex",
@@ -319,7 +344,7 @@ export default function DeletedItemsPage() {
         </div>
       )}
 
-      {!loading && !appLoading && tab === "transactions" && (
+      {!loading && tab === "transactions" && (
         <div className="table-wrap">
           <table className="di-table">
             <thead>
@@ -411,12 +436,11 @@ export default function DeletedItemsPage() {
         </div>
       )}
 
-      {!loading && !appLoading && tab === "lineitems" && (
+      {!loading && tab === "lineitems" && (
         <div className="table-wrap">
           <table className="di-table">
             <thead>
               <tr>
-                <th>ID</th>
                 <th>Trans No</th>
                 <th>Product Code</th>
                 <th>Description</th>
@@ -431,16 +455,7 @@ export default function DeletedItemsPage() {
               {deletedLines.map((d) => {
                 const total = d.quantity * d.unit_price;
                 return (
-                  <tr key={d.id} className="row-deleted">
-                    <td
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 11,
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      {d.id}
-                    </td>
+                  <tr key={d.key} className="row-deleted">
                     <td
                       style={{
                         fontFamily: "var(--font-mono)",
@@ -475,7 +490,8 @@ export default function DeletedItemsPage() {
                           onClick={() =>
                             setConfirm({
                               type: "line",
-                              id: d.id,
+                              transno: d.transno,
+                              prodcode: d.prodcode,
                               action: "recover",
                             })
                           }
@@ -485,7 +501,9 @@ export default function DeletedItemsPage() {
                         </button>
                         <button
                           className="btn btn-danger btn-sm"
-                          onClick={() => handlePermanentDeleteLine(d.id)}
+                          onClick={() =>
+                            handlePermanentDeleteLine(d.transno, d.prodcode)
+                          }
                           disabled={actionLoading}
                         >
                           <Trash2 size={13} /> Delete
@@ -498,7 +516,7 @@ export default function DeletedItemsPage() {
               {deletedLines.length === 0 && (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={8}
                     style={{
                       textAlign: "center",
                       padding: 36,
@@ -521,13 +539,14 @@ export default function DeletedItemsPage() {
           message={
             confirm.type === "sale"
               ? `Recover transaction "${confirm.id}"? This will also recover all its line items (cascade restore).`
-              : `Recover line item "${confirm.id}"?`
+              : `Recover line item "${confirm.prodcode}" from transaction "${confirm.transno}"?`
           }
           confirmLabel={actionLoading ? "Recovering…" : "Recover"}
           confirmClass="btn-primary"
           onConfirm={() => {
             if (confirm.type === "sale") handleRecoverSale(confirm.id);
-            if (confirm.type === "line") handleRecoverLine(confirm.id);
+            if (confirm.type === "line")
+              handleRecoverLine(confirm.transno, confirm.prodcode);
           }}
           onCancel={() => setConfirm(null)}
         />
@@ -535,6 +554,3 @@ export default function DeletedItemsPage() {
     </div>
   );
 }
-
-// Add RefreshCw icon import
-import { RefreshCw } from "lucide-react";

@@ -1,50 +1,93 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { TrendingUp } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
-import './Auth.css';
+// src/pages/AuthCallbackPage.jsx
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { handleGoogleCallback } from "../services/authService";
+import { Loader2 } from "lucide-react";
 
 export default function AuthCallbackPage() {
-  const nav = useNavigate();
+  const navigate = useNavigate();
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) {
-        nav('/login', { replace: true });
-        return;
+    const processCallback = async () => {
+      try {
+        // Handle Google OAuth callback
+        await handleGoogleCallback();
+        // Redirect to sales page on success
+        navigate("/sales", { replace: true });
+      } catch (err) {
+        console.error("Auth callback error:", err);
+        setError(err.message);
+        // Redirect to login with error after 3 seconds
+        setTimeout(() => {
+          navigate("/login?error=not_activated", { replace: true });
+        }, 3000);
       }
+    };
 
-      const { data: userRow } = await supabase
-        .from('user')
-        .select('record_status')
-        .eq('userid', session.user.id)
-        .single();
+    processCallback();
+  }, [navigate]);
 
-      if (userRow?.record_status === 'ACTIVE') {
-        nav('/sales', { replace: true });
-      } else {
-        await supabase.auth.signOut();
-        nav('/login?error=not_activated', { replace: true });
-      }
-    });
-  }, [nav]);
+  if (error) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          background:
+            "linear-gradient(135deg, #0f0c29 0%, #1a0533 40%, #0d1b3e 100%)",
+          color: "white",
+          textAlign: "center",
+          padding: 20,
+        }}
+      >
+        <div
+          style={{
+            width: 48,
+            height: 48,
+            border: "3px solid rgba(255,255,255,0.2)",
+            borderTop: "3px solid #ef4444",
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+            margin: "0 auto 16px",
+          }}
+        />
+        <h3>Authentication Error</h3>
+        <p>{error}</p>
+        <p>Redirecting to login page...</p>
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
-    <div className="auth-page">
-      <div className="auth-card callback-card">
-        <div className="auth-logo-icon callback-icon">
-          <TrendingUp size={28} />
-        </div>
-        <h2 className="auth-title" style={{ marginTop: 20 }}>Completing Sign In…</h2>
-        <p className="auth-app-sub" style={{ marginBottom: 28 }}>
-          Please wait while we verify your session.
-        </p>
-        <div className="callback-spinner-wrap">
-          <div className="callback-spinner" />
-        </div>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 16 }}>
-          You will be redirected automatically.
-        </p>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
+        background:
+          "linear-gradient(135deg, #0f0c29 0%, #1a0533 40%, #0d1b3e 100%)",
+        color: "white",
+      }}
+    >
+      <div style={{ textAlign: "center" }}>
+        <Loader2 size={48} style={{ animation: "spin 0.8s linear infinite" }} />
+        <p style={{ marginTop: 16 }}>Completing sign in...</p>
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     </div>
   );

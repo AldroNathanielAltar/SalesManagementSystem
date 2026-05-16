@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Loader2, Save } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { useApp } from "../../context/AppContext";
+import Portal from "../../components/ui/Portal";
 import "./Modal.css";
 
 export default function EditSaleModal({ sale, onClose }) {
-  const { loadSales, customers, employees } = useApp(); // Changed: reloadSales -> loadSales
+  const { loadSales, customers, employees } = useApp();
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -20,6 +21,14 @@ export default function EditSaleModal({ sale, onClose }) {
     custno: sale?.custno || "",
     empno: sale?.empno || "",
   });
+
+  // Lock body scroll when modal opens
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, []);
 
   async function handleSave() {
     if (!saleData.custno) {
@@ -47,7 +56,7 @@ export default function EditSaleModal({ sale, onClose }) {
 
       if (updateError) throw updateError;
 
-      await loadSales(); // Changed: reloadSales -> loadSales
+      await loadSales();
       onClose();
     } catch (err) {
       setError(err.message || "Failed to save changes");
@@ -56,7 +65,7 @@ export default function EditSaleModal({ sale, onClose }) {
     }
   }
 
-  return (
+  const modalContent = (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -167,4 +176,6 @@ export default function EditSaleModal({ sale, onClose }) {
       </div>
     </div>
   );
+
+  return <Portal>{modalContent}</Portal>;
 }

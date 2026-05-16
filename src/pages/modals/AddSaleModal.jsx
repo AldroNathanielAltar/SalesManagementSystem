@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { X, Loader2, Plus, Trash2 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { useApp } from "../../context/AppContext";
+import Portal from "../../components/ui/Portal";
 import "./Modal.css";
 
 export default function AddSaleModal({ onClose }) {
@@ -17,8 +18,12 @@ export default function AddSaleModal({ onClose }) {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [showCustomerDetails, setShowCustomerDetails] = useState(false);
-  const [showEmployeeDetails, setShowEmployeeDetails] = useState(false);
+  const [lineItems, setLineItems] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState("");
+  const [productQuantity, setProductQuantity] = useState(1);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [savingMessage, setSavingMessage] = useState("");
 
   const [saleData, setSaleData] = useState({
     transno: "",
@@ -27,11 +32,13 @@ export default function AddSaleModal({ onClose }) {
     empno: "",
   });
 
-  const [lineItems, setLineItems] = useState([]);
-  const [selectedProduct, setSelectedProduct] = useState("");
-  const [productQuantity, setProductQuantity] = useState(1);
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  // Lock body scroll when modal opens
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, []);
 
   // Generate transaction number
   useEffect(() => {
@@ -57,17 +64,17 @@ export default function AddSaleModal({ onClose }) {
   useEffect(() => {
     const customer = customers.find((c) => c.custno === saleData.custno);
     setSelectedCustomer(customer);
-    setShowCustomerDetails(!!customer);
   }, [saleData.custno, customers]);
 
   // Update selected employee when empno changes
   useEffect(() => {
     const employee = employees.find((e) => e.empno === saleData.empno);
     setSelectedEmployee(employee);
-    setShowEmployeeDetails(!!employee);
   }, [saleData.empno, employees]);
 
-  const addLineItem = () => {
+  const addLineItem = (e) => {
+    if (e) e.preventDefault();
+
     if (!selectedProduct) {
       setError("Please select a product");
       return;
@@ -81,7 +88,7 @@ export default function AddSaleModal({ onClose }) {
       (item) => item.prodcode === selectedProduct,
     );
     if (existingItem) {
-      setError("Product already added. Remove it first to change quantity.");
+      setError("Product already added. Edit quantity instead.");
       return;
     }
 
@@ -90,7 +97,7 @@ export default function AddSaleModal({ onClose }) {
       {
         id: Date.now(),
         prodcode: selectedProduct,
-        description: product?.description,
+        description: product?.description || selectedProduct,
         unit: product?.unit || "pc",
         quantity: productQuantity,
         unitprice: price,
@@ -124,7 +131,10 @@ export default function AddSaleModal({ onClose }) {
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
 
-  const handleSave = async () => {
+  const handleSave = async (e) => {
+    if (e) e.preventDefault();
+
+    // Validation
     if (!saleData.custno) {
       setError("Please select a customer");
       return;
@@ -140,8 +150,11 @@ export default function AddSaleModal({ onClose }) {
 
     setSaving(true);
     setError("");
+    setSavingMessage("Creating transaction...");
 
     try {
+      // Add the sale header
+      setSavingMessage("Saving transaction details...");
       await addSale({
         transno: saleData.transno,
         salesdate: saleData.salesdate,
@@ -149,7 +162,11 @@ export default function AddSaleModal({ onClose }) {
         empno: saleData.empno,
       });
 
-      for (const item of lineItems) {
+      // Add each line item
+      setSavingMessage("Adding products to transaction...");
+      for (let i = 0; i < lineItems.length; i++) {
+        const item = lineItems[i];
+        setSavingMessage(`Adding product ${i + 1} of ${lineItems.length}...`);
         await addDetailLine({
           transno: saleData.transno,
           prodcode: item.prodcode,
@@ -157,18 +174,28 @@ export default function AddSaleModal({ onClose }) {
         });
       }
 
+      setSavingMessage("Transaction saved successfully!");
+
+      // Small delay to show success message
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Refresh the sales list
       await loadSales();
+
+      // Close the modal
       onClose();
     } catch (err) {
-      setError(err.message || "Failed to save sale");
+      console.error("Save error:", err);
+      setError(err.message || "Failed to save sale. Please try again.");
     } finally {
       setSaving(false);
+      setSavingMessage("");
     }
   };
 
-  return (
+  const modalContent = (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-xl" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Add New Transaction</h3>
           <button className="btn-icon" onClick={onClose}>
@@ -178,167 +205,143 @@ export default function AddSaleModal({ onClose }) {
 
         <div className="modal-body">
           {error && (
-            <div
-              style={{
-                color: "red",
-                marginBottom: 16,
-                padding: 10,
-                background: "#fee2e2",
-                borderRadius: 8,
-              }}
-            >
-              {error}
+            <div className="error-message">
+              <span>⚠️</span> {error}
             </div>
           )}
 
-          {/* Transaction Information */}
-          <div className="form-group">
-            <label htmlFor="transno">Transaction No</label>
-            <input
-              id="transno"
-              name="transno"
-              type="text"
-              className="form-input"
-              value={saleData.transno}
-              disabled
-            />
-          </div>
+          {saving && (
+            <div className="saving-message">
+              <Loader2
+                size={16}
+                style={{ animation: "spin 0.7s linear infinite" }}
+              />
+              <span>{savingMessage}</span>
+            </div>
+          )}
 
-          <div className="form-group">
-            <label htmlFor="salesdate">Sales Date</label>
-            <input
-              id="salesdate"
-              name="salesdate"
-              type="date"
-              className="form-input"
-              value={saleData.salesdate}
-              onChange={(e) =>
-                setSaleData({ ...saleData, salesdate: e.target.value })
-              }
-            />
-          </div>
+          {/* 4x4 Grid Form Layout */}
+          <div className="form-grid-4x4">
+            <div className="form-group">
+              <label htmlFor="transno">Transaction No</label>
+              <input
+                id="transno"
+                name="transno"
+                type="text"
+                className="form-input"
+                value={saleData.transno}
+                disabled
+              />
+            </div>
 
-          <hr />
+            <div className="form-group">
+              <label htmlFor="salesdate">Sales Date</label>
+              <input
+                id="salesdate"
+                name="salesdate"
+                type="date"
+                className="form-input"
+                value={saleData.salesdate}
+                onChange={(e) =>
+                  setSaleData({ ...saleData, salesdate: e.target.value })
+                }
+              />
+            </div>
 
-          {/* Customer Selection */}
-          <div className="form-group">
-            <label htmlFor="custno">Customer</label>
-            <select
-              id="custno"
-              name="custno"
-              className="form-input"
-              value={saleData.custno}
-              onChange={(e) =>
-                setSaleData({ ...saleData, custno: e.target.value })
-              }
-            >
-              <option value="">Select Customer</option>
-              {customers.map((c) => (
-                <option key={c.custno} value={c.custno}>
-                  {c.custno} - {c.custname}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {showCustomerDetails && selectedCustomer && (
-            <div
-              style={{
-                marginBottom: 16,
-                padding: 12,
-                background: "#f3f4f6",
-                borderRadius: 8,
-              }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 8,
-                }}
+            <div className="form-group">
+              <label htmlFor="custno">Customer</label>
+              <select
+                id="custno"
+                name="custno"
+                className="form-input"
+                value={saleData.custno}
+                onChange={(e) =>
+                  setSaleData({ ...saleData, custno: e.target.value })
+                }
               >
-                <div>
-                  <label style={{ fontSize: 11, color: "#6b7280" }}>
-                    Customer Name:
-                  </label>
-                  <div style={{ fontSize: 14, fontWeight: 500 }}>
-                    {selectedCustomer.custname}
-                  </div>
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, color: "#6b7280" }}>
-                    Pay Term:
-                  </label>
-                  <div style={{ fontSize: 14 }}>
-                    {selectedCustomer.payterm || "—"}
-                  </div>
-                </div>
-                <div style={{ gridColumn: "span 2" }}>
-                  <label style={{ fontSize: 11, color: "#6b7280" }}>
-                    Address:
-                  </label>
-                  <div style={{ fontSize: 14 }}>
-                    {selectedCustomer.address || "—"}
-                  </div>
-                </div>
-              </div>
+                <option value="">Select Customer</option>
+                {customers.map((c) => (
+                  <option key={c.custno} value={c.custno}>
+                    {c.custno} - {c.custname}
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
 
-          <hr />
-
-          {/* Employee Selection */}
-          <div className="form-group">
-            <label htmlFor="empno">Employee</label>
-            <select
-              id="empno"
-              name="empno"
-              className="form-input"
-              value={saleData.empno}
-              onChange={(e) =>
-                setSaleData({ ...saleData, empno: e.target.value })
-              }
-            >
-              <option value="">Select Employee</option>
-              {employees.map((e) => (
-                <option key={e.empno} value={e.empno}>
-                  {e.empno} - {e.fullname || `${e.lastname}, ${e.firstname}`}
-                </option>
-              ))}
-            </select>
+            <div className="form-group">
+              <label htmlFor="empno">Employee</label>
+              <select
+                id="empno"
+                name="empno"
+                className="form-input"
+                value={saleData.empno}
+                onChange={(e) =>
+                  setSaleData({ ...saleData, empno: e.target.value })
+                }
+              >
+                <option value="">Select Employee</option>
+                {employees.map((e) => (
+                  <option key={e.empno} value={e.empno}>
+                    {e.empno} - {e.fullname || `${e.lastname}, ${e.firstname}`}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {showEmployeeDetails && selectedEmployee && (
-            <div
-              style={{
-                marginBottom: 16,
-                padding: 12,
-                background: "#f3f4f6",
-                borderRadius: 8,
-              }}
-            >
-              <div>
-                <label style={{ fontSize: 11, color: "#6b7280" }}>
-                  Employee Name:
-                </label>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>
-                  {selectedEmployee.lastname}, {selectedEmployee.firstname}
+          {/* Customer Details Card */}
+          {selectedCustomer && (
+            <div className="detail-card">
+              <h4>Customer Information</h4>
+              <div className="detail-grid">
+                <div className="detail-group">
+                  <label>Customer Code:</label>
+                  <span>{selectedCustomer.custno}</span>
+                </div>
+                <div className="detail-group">
+                  <label>Customer Name:</label>
+                  <span>{selectedCustomer.custname}</span>
+                </div>
+                <div className="detail-group">
+                  <label>Pay Term:</label>
+                  <span>{selectedCustomer.payterm || "—"}</span>
+                </div>
+                <div className="detail-group full-width">
+                  <label>Address:</label>
+                  <span>{selectedCustomer.address || "—"}</span>
                 </div>
               </div>
             </div>
           )}
 
-          <hr />
+          {/* Employee Details Card */}
+          {selectedEmployee && (
+            <div className="detail-card">
+              <h4>Employee Information</h4>
+              <div className="detail-grid">
+                <div className="detail-group">
+                  <label>Employee Code:</label>
+                  <span>{selectedEmployee.empno}</span>
+                </div>
+                <div className="detail-group">
+                  <label>Employee Name:</label>
+                  <span>
+                    {selectedEmployee.lastname}, {selectedEmployee.firstname}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
-          {/* Products Section */}
-          <h4>Products</h4>
+          {/* Products Section Header */}
+          <div className="products-header">
+            <h4>Products</h4>
+          </div>
 
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          {/* Add Product Row */}
+          <div className="add-product-row">
             <select
-              id="product"
-              name="product"
-              className="form-input"
-              style={{ flex: 2 }}
+              className="form-input product-select"
               value={selectedProduct}
               onChange={(e) => setSelectedProduct(e.target.value)}
             >
@@ -349,114 +352,49 @@ export default function AddSaleModal({ onClose }) {
                 </option>
               ))}
             </select>
-            <input
-              id="quantity"
-              name="quantity"
-              type="number"
-              className="form-input"
-              style={{ width: 100 }}
-              value={productQuantity}
-              onChange={(e) => setProductQuantity(Number(e.target.value))}
-              min="1"
-            />
-            <button className="btn btn-primary" onClick={addLineItem}>
-              <Plus size={14} /> Add
+            <div className="quantity-wrapper">
+              <input
+                type="number"
+                className="form-input quantity-input"
+                value={productQuantity}
+                onChange={(e) => setProductQuantity(Number(e.target.value))}
+                min="1"
+              />
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary add-product-btn"
+              onClick={addLineItem}
+            >
+              <Plus size={14} /> Add Product
             </button>
           </div>
 
           {/* Line Items Table */}
-          {lineItems.length > 0 && (
-            <div
-              className="table-wrap"
-              style={{ marginTop: 16, overflowX: "auto" }}
-            >
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          {lineItems.length > 0 ? (
+            <div className="table-wrap">
+              <table className="items-table">
                 <thead>
-                  <tr style={{ background: "#f9fafb" }}>
-                    <th
-                      style={{
-                        padding: 10,
-                        textAlign: "left",
-                        borderBottom: "1px solid #e5e7eb",
-                      }}
-                    >
-                      Product Code
-                    </th>
-                    <th
-                      style={{
-                        padding: 10,
-                        textAlign: "left",
-                        borderBottom: "1px solid #e5e7eb",
-                      }}
-                    >
-                      Description
-                    </th>
-                    <th
-                      style={{
-                        padding: 10,
-                        textAlign: "right",
-                        borderBottom: "1px solid #e5e7eb",
-                      }}
-                    >
-                      Quantity
-                    </th>
-                    <th
-                      style={{
-                        padding: 10,
-                        textAlign: "right",
-                        borderBottom: "1px solid #e5e7eb",
-                      }}
-                    >
-                      Unit Price
-                    </th>
-                    <th
-                      style={{
-                        padding: 10,
-                        textAlign: "right",
-                        borderBottom: "1px solid #e5e7eb",
-                      }}
-                    >
-                      Total
-                    </th>
-                    <th
-                      style={{
-                        padding: 10,
-                        textAlign: "center",
-                        borderBottom: "1px solid #e5e7eb",
-                      }}
-                    ></th>
+                  <tr>
+                    <th>Product Code</th>
+                    <th>Description</th>
+                    <th>Unit</th>
+                    <th className="text-right">Quantity</th>
+                    <th className="text-right">Unit Price</th>
+                    <th className="text-right">Total</th>
+                    <th className="text-center"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {lineItems.map((item) => (
                     <tr key={item.id}>
-                      <td
-                        style={{
-                          padding: 10,
-                          borderBottom: "1px solid #e5e7eb",
-                        }}
-                      >
-                        {item.prodcode}
-                      </td>
-                      <td
-                        style={{
-                          padding: 10,
-                          borderBottom: "1px solid #e5e7eb",
-                        }}
-                      >
-                        {item.description}
-                      </td>
-                      <td
-                        style={{
-                          padding: 10,
-                          textAlign: "right",
-                          borderBottom: "1px solid #e5e7eb",
-                        }}
-                      >
+                      <td>{item.prodcode}</td>
+                      <td>{item.description}</td>
+                      <td>{item.unit}</td>
+                      <td className="text-right">
                         <input
                           type="number"
-                          className="form-input"
-                          style={{ width: 80, textAlign: "right" }}
+                          className="quantity-edit"
                           value={item.quantity}
                           onChange={(e) =>
                             updateQuantity(item.id, Number(e.target.value))
@@ -464,37 +402,20 @@ export default function AddSaleModal({ onClose }) {
                           min="1"
                         />
                       </td>
-                      <td
-                        style={{
-                          padding: 10,
-                          textAlign: "right",
-                          borderBottom: "1px solid #e5e7eb",
-                        }}
-                      >
+                      <td className="text-right">
                         ${item.unitprice.toLocaleString()}
                       </td>
-                      <td
-                        style={{
-                          padding: 10,
-                          textAlign: "right",
-                          fontWeight: 600,
-                          borderBottom: "1px solid #e5e7eb",
-                        }}
-                      >
+                      <td className="text-right">
                         ${item.total.toLocaleString()}
                       </td>
-                      <td
-                        style={{
-                          padding: 10,
-                          textAlign: "center",
-                          borderBottom: "1px solid #e5e7eb",
-                        }}
-                      >
+                      <td className="text-center">
                         <button
-                          className="btn-icon"
+                          type="button"
+                          className="btn-icon delete-btn"
                           onClick={() => removeLineItem(item.id)}
+                          title="Remove product"
                         >
-                          <Trash2 size={14} color="red" />
+                          <Trash2 size={14} />
                         </button>
                       </td>
                     </tr>
@@ -502,45 +423,39 @@ export default function AddSaleModal({ onClose }) {
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td
-                      colSpan="4"
-                      style={{
-                        padding: 12,
-                        textAlign: "right",
-                        fontWeight: 600,
-                      }}
-                    >
+                    <td colSpan="5" className="text-right grand-total-label">
                       Grand Total ({lineItems.length} items):
                     </td>
-                    <td
-                      colSpan="2"
-                      style={{
-                        padding: 12,
-                        fontWeight: 700,
-                        fontSize: 18,
-                        color: "#2563eb",
-                      }}
-                    >
+                    <td colSpan="2" className="grand-total-value">
                       ${subtotal.toLocaleString()}
                     </td>
                   </tr>
                 </tfoot>
               </table>
             </div>
-          )}
-
-          {lineItems.length === 0 && (
-            <div style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
-              No products added. Use the form above to add products.
+          ) : (
+            <div className="empty-products">
+              <span>📦</span>
+              <p>No products added yet</p>
+              <small>
+                Select a product and click "Add Product" to add items to this
+                transaction
+              </small>
             </div>
           )}
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={onClose}
+            disabled={saving}
+          >
             Cancel
           </button>
           <button
+            type="button"
             className="btn btn-primary"
             onClick={handleSave}
             disabled={saving}
@@ -561,4 +476,6 @@ export default function AddSaleModal({ onClose }) {
       </div>
     </div>
   );
+
+  return <Portal>{modalContent}</Portal>;
 }

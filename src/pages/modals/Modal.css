@@ -1,141 +1,285 @@
-/* Modal.css - Simplified Working Version */
+/* Add these to your existing Modal.css */
 
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-}
-
-.modal {
-  background: white !important;
-  border-radius: 12px;
-  width: 500px;
-  max-width: 90%;
+/* Wider Modal */
+.modal-xl {
+  width: 1000px;
+  max-width: 95%;
   max-height: 90vh;
   overflow-y: auto;
-  position: relative;
-  z-index: 10000;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
 }
 
-.modal-lg {
-  width: 800px;
-  max-width: 90%;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid #e5e7eb;
-  background: white;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #111827;
-}
-
-.modal-body {
-  padding: 20px;
-  background: white;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 20px;
-  border-top: 1px solid #e5e7eb;
-  background: #f9fafb;
+/* 4x4 Grid Layout */
+.form-grid-4x4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
 /* Form Groups */
 .form-group {
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 .form-group label {
   display: block;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   margin-bottom: 6px;
-  color: #6b7280;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.form-input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 14px;
-  background: white;
-  box-sizing: border-box;
+/* Detail Cards */
+.detail-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
 }
 
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 500;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-}
-
-.btn-primary {
-  background: #2563eb;
-  color: white;
-}
-
-.btn-secondary {
-  background: #f3f4f6;
-  color: #111827;
-  border: 1px solid #e5e7eb;
-}
-
-.btn-icon {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 6px;
-}
-
-hr {
-  margin: 16px 0;
-  border: none;
-  border-top: 1px solid #e5e7eb;
-}
-
-h4 {
+.detail-card h4 {
   margin: 0 0 12px 0;
   font-size: 14px;
   font-weight: 600;
-  color: #374151;
+  color: #1e293b;
+  border-left: 3px solid #7c3aed;
+  padding-left: 10px;
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.detail-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.detail-group span {
+  font-size: 14px;
+  color: #0f172a;
+  font-weight: 500;
+}
+
+.detail-group.full-width {
+  grid-column: span 2;
+}
+
+/* Products Section */
+.products-header {
+  margin: 20px 0 16px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.products-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  border-left: 3px solid #7c3aed;
+  padding-left: 10px;
+}
+
+.add-product-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  align-items: flex-end;
+}
+
+.product-select {
+  flex: 3;
+}
+
+.quantity-wrapper {
+  width: 120px;
+}
+
+.quantity-input {
+  width: 100%;
+  text-align: center;
+}
+
+.add-product-btn {
+  white-space: nowrap;
+  padding: 10px 20px;
+}
+
+/* Items Table */
+.items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.items-table th {
+  padding: 12px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.items-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 13px;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.quantity-edit {
+  width: 80px;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  text-align: right;
+  font-size: 13px;
+}
+
+.delete-btn {
+  color: #ef4444;
+  transition: all 0.2s;
+}
+
+.delete-btn:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.grand-total-label {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 14px;
+}
+
+.grand-total-value {
+  font-weight: 700;
+  font-size: 20px;
+  color: #2563eb;
+}
+
+.empty-products {
+  text-align: center;
+  padding: 48px 20px;
+  color: #94a3b8;
+  background: #f8fafc;
+  border-radius: 12px;
+  margin-top: 16px;
+}
+
+.empty-products span {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.empty-products p {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.empty-products small {
+  font-size: 12px;
+}
+
+/* Error Message */
+.error-message {
+  color: #dc2626;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: #fef2f2;
+  border-radius: 10px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-left: 3px solid #dc2626;
+}
+
+/* Saving Message */
+.saving-message {
+  color: #7c3aed;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: #f3e8ff;
+  border-radius: 10px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-left: 3px solid #7c3aed;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .form-grid-4x4 {
+    grid-template-columns: repeat(2, 1fr);
   }
-  to {
-    transform: rotate(360deg);
+
+  .detail-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .detail-group.full-width {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 768px) {
+  .add-product-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .quantity-wrapper {
+    width: 100%;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-group.full-width {
+    grid-column: span 1;
+  }
+
+  .items-table {
+    font-size: 12px;
+  }
+
+  .items-table th,
+  .items-table td {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 600px) {
+  .form-grid-4x4 {
+    grid-template-columns: 1fr;
   }
 }

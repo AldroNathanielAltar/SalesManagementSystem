@@ -1,17 +1,25 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AlertTriangle, X, Loader2 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { useAuth } from "../../context/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
+import Portal from "../../components/ui/Portal";
 import "./Modal.css";
 
 export default function SoftDeleteSaleDialog({ sale, onClose }) {
-  const { loadSales } = useApp(); // Changed: reloadSales -> loadSales
+  const { loadSales } = useApp();
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState("");
 
   const isSuperAdmin = currentUser?.user_type === "SUPERADMIN";
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, []);
 
   async function handleConfirm() {
     if (!isSuperAdmin) {
@@ -25,6 +33,7 @@ export default function SoftDeleteSaleDialog({ sale, onClose }) {
     try {
       const transno = sale?.transNo || sale?.transno;
 
+      // Update sale status to DELETED
       const { error: saleError } = await supabase
         .from("sales")
         .update({
@@ -35,6 +44,7 @@ export default function SoftDeleteSaleDialog({ sale, onClose }) {
 
       if (saleError) throw saleError;
 
+      // Update all line items to DELETED
       const { error: detailsError } = await supabase
         .from("salesdetail")
         .update({ record_status: "DELETED" })
@@ -42,9 +52,18 @@ export default function SoftDeleteSaleDialog({ sale, onClose }) {
 
       if (detailsError) throw detailsError;
 
-      await loadSales(); // Changed: reloadSales -> loadSales
+      // Refresh sales data in AppContext
+      await loadSales();
+
+      // Close the modal
       onClose();
+
+      // If we're on the DeletedItemsPage, reload the page to show the new item
+      if (window.location.pathname === "/deleted-items") {
+        window.location.reload();
+      }
     } catch (err) {
+      console.error("Soft delete error:", err);
       setApiError(err.message || "Failed to delete transaction.");
     } finally {
       setLoading(false);
@@ -53,13 +72,9 @@ export default function SoftDeleteSaleDialog({ sale, onClose }) {
 
   const transno = sale?.transNo || sale?.transno || "Unknown";
 
-  return (
+  const modalContent = (
     <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal"
-        style={{ maxWidth: 400 }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <AlertTriangle size={18} style={{ color: "#dc2626" }} />
@@ -73,6 +88,7 @@ export default function SoftDeleteSaleDialog({ sale, onClose }) {
         <div className="modal-body">
           {apiError && (
             <div
+              className="error-message"
               style={{
                 color: "red",
                 marginBottom: 16,
@@ -85,12 +101,13 @@ export default function SoftDeleteSaleDialog({ sale, onClose }) {
             </div>
           )}
 
-          <p>
+          <p style={{ marginBottom: 16 }}>
             Are you sure you want to soft-delete transaction{" "}
             <strong>{transno}</strong>?
           </p>
 
           <div
+            className="warning-box"
             style={{
               marginTop: 16,
               padding: 12,
@@ -109,7 +126,11 @@ export default function SoftDeleteSaleDialog({ sale, onClose }) {
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>
+          <button
+            className="btn btn-secondary"
+            onClick={onClose}
+            disabled={loading}
+          >
             Cancel
           </button>
           <button
@@ -117,10 +138,22 @@ export default function SoftDeleteSaleDialog({ sale, onClose }) {
             onClick={handleConfirm}
             disabled={loading}
           >
-            {loading ? "Deleting..." : "Soft-Delete Transaction"}
+            {loading ? (
+              <>
+                <Loader2
+                  size={14}
+                  style={{ animation: "spin 0.7s linear infinite" }}
+                />
+                Deleting...
+              </>
+            ) : (
+              "Soft-Delete Transaction"
+            )}
           </button>
         </div>
       </div>
     </div>
   );
+
+  return <Portal>{modalContent}</Portal>;
 }
