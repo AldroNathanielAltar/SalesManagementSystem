@@ -2,17 +2,20 @@
 
 > BS Information Technology Capstone | New Era University — CCS | AY 2025–2026
 
+## 🚀 Live Demo
+[https://sales-management-system-two-gold.vercel.app](https://sales-management-system-two-gold.vercel.app)
+
 ---
 
 ## Team
 
-| Label | Role |
-|-------|------|
-| M1 | Project Lead / Full-Stack Developer |
-| M2 | Frontend Developer (UI/UX) |
-| M3 | Backend / Database Engineer |
-| M4 | Rights & Auth Specialist |
-| M5 | QA / Documentation |
+| Label | Name | Role |
+|-------|------|------|
+| M1 | Aldro Nathaniel P. Altar | Project Lead / Full-Stack Developer |
+| M2 | Josh D. Singson | Frontend Developer (UI/UX) |
+| M3 | Cyden N. Centeno | Backend / Database Engineer |
+| M4 | Thyrone P. Asuncion | Rights & Auth Specialist |
+| M5 | Ven Angel C. Tagaro | QA / Documentation |
 
 ---
 
@@ -26,7 +29,7 @@
 | Auth | Supabase Auth — Email/Password + Google OAuth 2.0 |
 | State | React Context API |
 | Version Control | Git + GitHub |
-| Deployment | Vercel / Netlify |
+| Deployment | Vercel |
 | Testing | Vitest + React Testing Library |
 
 ---
@@ -35,7 +38,7 @@
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/aldro13-tech/SalesManagementSystem.git
+git clone https://github.com/AldroNathanielAltar/SalesManagementSystem.git
 cd SalesManagementSystem
 git checkout dev
 ```
