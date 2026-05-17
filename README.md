@@ -13,9 +13,9 @@
 | Label | Name                     | Role                                |
 | ----- | ------------------------ | ----------------------------------- |
 | M1    | Aldro Nathaniel P. Altar | Project Lead / Full-Stack Developer |
-| M2    | Thyrone P. Asuncion      | Frontend Developer (UI/UX)          |
-| M3    | Josh D. Singson          | Backend / Database Engineer         |
-| M4    | Cyden N. Centeno         | Rights & Auth Specialist            |
+| M2    | Josh D. Singson          | Frontend Developer (UI/UX)          |
+| M3    | Cyden N. Centeno         | Backend / Database Engineer         |
+| M4    | Thyrone P. Asuncion      | Rights & Auth Specialist            |
 | M5    | Ven Angel C. Tagaro      | QA / Documentation                  |
 
 ---
