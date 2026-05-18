@@ -1,3 +1,11 @@
+-- =========================================
+-- FINAL DATABASE VIEWS SCRIPT
+-- =========================================
+-- Contains all analytical views for reporting:
+-- 1. Sales by Customer
+-- 2. Top Products Sold
+-- 3. Monthly Sales Trend
+-- =========================================
 CREATE OR REPLACE VIEW sales_by_customer AS
 SELECT 
   c.custno,
