@@ -1,3 +1,5 @@
+// Placeholder page for the Admin / User Management module.
+// Only accessible by ADMIN and SUPERADMIN roles (guarded by allowedRoles in App.jsx).
 export default function AdminPage() {
   return (
     <div className="p-8">
