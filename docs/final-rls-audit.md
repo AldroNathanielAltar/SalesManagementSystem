@@ -1,3 +1,4 @@
+<!-- PR: docs/final-rls-audit | Sprint: 3 | Author: cydencenteno-byte -->
 # Final RLS Audit Report
 
 ## RLS Status per Table
