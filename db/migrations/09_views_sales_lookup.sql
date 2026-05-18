@@ -1,4 +1,4 @@
-
+-- PR: db/views-sales-lookup | Sprint: 2 | Author: cydencenteno-byte
 CREATE OR REPLACE VIEW sales_with_lookup AS
 SELECT 
   s.transNo,
