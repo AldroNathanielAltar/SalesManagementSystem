@@ -1,3 +1,5 @@
+// Placeholder page for the Sales Transactions module
+// It is currently routed in App.jsx and protected by ProtectedRoute
 export default function SalesPage() {
   return (
     <div className="p-8">
