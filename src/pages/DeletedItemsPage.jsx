@@ -157,7 +157,7 @@ export default function DeletedItemsPage() {
     fetchDeletedItems();
   }, []);
 
-  // Recover a sale (soft delete reversal)
+  // Recover a sale (soft delete reversal) - NO ALERT
   async function handleRecoverSale(transno) {
     setActionLoading(true);
     try {
@@ -185,16 +185,16 @@ export default function DeletedItemsPage() {
         `🔄 Transaction ${transno} was recovered from deleted items`,
         "success",
       );
-      alert(`Transaction ${transno} recovered successfully!`);
+      // NO ALERT HERE - removed
     } catch (err) {
-      alert(err.message || "Failed to recover sale");
+      addNotification(err.message || "Failed to recover sale", "error");
     } finally {
       setActionLoading(false);
       setConfirm(null);
     }
   }
 
-  // Recover a line item (using transno and prodcode - no 'id' column)
+  // Recover a line item - NO ALERT
   async function handleRecoverLine(transno, prodcode) {
     setActionLoading(true);
     try {
@@ -212,16 +212,16 @@ export default function DeletedItemsPage() {
         `🔄 Line item ${prodcode} from transaction ${transno} was recovered`,
         "success",
       );
-      alert(`Line item ${prodcode} recovered successfully!`);
+      // NO ALERT HERE - removed
     } catch (err) {
-      alert(err.message || "Failed to recover line item");
+      addNotification(err.message || "Failed to recover line item", "error");
     } finally {
       setActionLoading(false);
       setConfirm(null);
     }
   }
 
-  // Permanently delete a sale (hard delete - superadmin only)
+  // Permanently delete a sale - NO ALERT
   async function handlePermanentDeleteSale(transno) {
     if (
       !window.confirm(
@@ -254,15 +254,15 @@ export default function DeletedItemsPage() {
         `💀 Transaction ${transno} was permanently deleted by ${currentUser?.username || "Super Admin"}`,
         "error",
       );
-      alert(`Transaction ${transno} permanently deleted.`);
+      // NO ALERT HERE - removed
     } catch (err) {
-      alert(err.message || "Failed to delete sale");
+      addNotification(err.message || "Failed to delete sale", "error");
     } finally {
       setActionLoading(false);
     }
   }
 
-  // Permanently delete a line item (using transno and prodcode)
+  // Permanently delete a line item - NO ALERT
   async function handlePermanentDeleteLine(transno, prodcode) {
     if (
       !window.confirm(
@@ -287,9 +287,9 @@ export default function DeletedItemsPage() {
         `💀 Line item ${prodcode} from transaction ${transno} was permanently deleted`,
         "error",
       );
-      alert(`Line item ${prodcode} permanently deleted.`);
+      // NO ALERT HERE - removed
     } catch (err) {
-      alert(err.message || "Failed to delete line item");
+      addNotification(err.message || "Failed to delete line item", "error");
     } finally {
       setActionLoading(false);
     }

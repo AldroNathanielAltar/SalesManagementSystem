@@ -1,9 +1,11 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
+// Route guard component that restricts access to authenticated users only
 export default function ProtectedRoute({ children }) {
   const { currentUser, authLoading, authError } = useAuth();
 
+  // Show loading spinner while authentication state is being determined
   // Show spinner only on first load — not on tab switch
   if (authLoading) {
     return (
@@ -18,6 +20,7 @@ export default function ProtectedRoute({ children }) {
           gap: 16,
         }}
       >
+        {/* Spinner animation element */}
         <div
           style={{
             width: 36,
@@ -43,15 +46,19 @@ export default function ProtectedRoute({ children }) {
     );
   }
 
-  // Inactive account error
+  // Handle inactive account error by redirecting with error parameter
   if (authError === "INACTIVE") {
     return <Navigate to="/login?error=not_activated" replace />;
   }
 
+  // Redirect to login if no user is authenticated
   if (!currentUser) return <Navigate to="/login" replace />;
+
+  // Redirect to login with error if user account is inactive
   if (currentUser.record_status === "INACTIVE") {
     return <Navigate to="/login?error=not_activated" replace />;
   }
 
+  // User is authenticated and active, render protected content
   return children;
 }
