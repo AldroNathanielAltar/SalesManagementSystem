@@ -48,10 +48,8 @@ export default function SalesListPage() {
   const [sortField, setSortField] = useState("salesDate");
   const [sortDirection, setSortDirection] = useState("desc");
 
-  // Check if user can see stamp (Superadmin or Admin)
   const canSeeStamp = isSuperAdmin() || currentUser?.user_type === "ADMIN";
 
-  // Handle sort click
   const handleSort = (field) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -61,7 +59,6 @@ export default function SalesListPage() {
     }
   };
 
-  // Render sort icon
   const SortIcon = ({ field }) => {
     if (sortField !== field) {
       return <ArrowUp size={12} className="sort-icon-inactive" />;
@@ -73,7 +70,6 @@ export default function SalesListPage() {
     );
   };
 
-  // Fetch sales data
   useEffect(() => {
     const loadSalesData = async () => {
       setLoading(true);
@@ -119,7 +115,6 @@ export default function SalesListPage() {
 
         setFormattedSales(formatted);
 
-        // Calculate metrics after loading sales
         const transNos = formatted.map((s) => s.transNo);
         if (transNos.length > 0) {
           const { data: details } = await supabase
@@ -166,7 +161,6 @@ export default function SalesListPage() {
     loadSalesData();
   }, [isAdmin, isSuperAdmin, appLoading]);
 
-  // Function to refresh data after actions (without page refresh)
   const refreshData = async () => {
     await loadSales();
 
@@ -253,7 +247,7 @@ export default function SalesListPage() {
     }
   };
 
-  // Apply sorting and filtering
+  // FIXED: Date sorting - uses salesDate instead of displayDate
   const filteredAndSorted = useMemo(() => {
     let result = formattedSales.filter((s) => {
       const q = search.toLowerCase();
@@ -270,15 +264,30 @@ export default function SalesListPage() {
     });
 
     result.sort((a, b) => {
-      let aVal = a[sortField];
-      let bVal = b[sortField];
+      let aVal, bVal;
 
-      if (sortField === "items") {
+      // For date sorting, use raw salesDate (YYYY-MM-DD)
+      if (sortField === "displayDate") {
+        aVal = a.salesDate || "";
+        bVal = b.salesDate || "";
+      } else if (sortField === "items") {
         aVal = salesMetrics[a.transNo]?.items || 0;
         bVal = salesMetrics[b.transNo]?.items || 0;
       } else if (sortField === "total") {
         aVal = salesMetrics[a.transNo]?.total || 0;
         bVal = salesMetrics[b.transNo]?.total || 0;
+      } else {
+        aVal = a[sortField];
+        bVal = b[sortField];
+      }
+
+      if (aVal == null) aVal = "";
+      if (bVal == null) bVal = "";
+
+      if (sortField === "displayDate" || sortField === "salesDate") {
+        return sortDirection === "asc"
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal);
       }
 
       if (typeof aVal === "string") {
@@ -315,7 +324,6 @@ export default function SalesListPage() {
 
   return (
     <div className="fade-in">
-      {/* Summary cards */}
       <div className="sl-summary">
         <div className="sl-sum-card">
           <p className="slsv">
@@ -343,7 +351,6 @@ export default function SalesListPage() {
         </div>
       </div>
 
-      {/* Toolbar */}
       <div className="page-header">
         <div>
           <h2 className="page-title">Sales Transactions</h2>
@@ -404,7 +411,6 @@ export default function SalesListPage() {
         </div>
       </div>
 
-      {/* Loading state */}
       {(loading || appLoading) && (
         <div className="loading-container">
           <Loader2 size={20} className="spin" />
@@ -412,7 +418,6 @@ export default function SalesListPage() {
         </div>
       )}
 
-      {/* Table */}
       {!loading && !appLoading && (
         <div className="table-wrap">
           <table className="sl-table">
@@ -540,7 +545,6 @@ export default function SalesListPage() {
         </div>
       )}
 
-      {/* Modals */}
       {modal === "add" && (
         <AddSaleModal
           onClose={() => {
