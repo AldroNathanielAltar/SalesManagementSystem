@@ -34,6 +34,7 @@ export function AppProvider({ children }) {
   const [topProductsSold, setTopProductsSold] = useState([]);
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [toast, setToast] = useState(null); // ← Add toast state
 
   // Role helpers
   const isAdminUser = useCallback(() => {
@@ -47,17 +48,31 @@ export function AppProvider({ children }) {
     return currentUser?.user_type === "SUPERADMIN";
   }, [currentUser?.user_type]);
 
-  // ── NOTIFICATION FUNCTIONS ──────────────────────────────────────────────
-  const addNotification = useCallback((text, type = "info") => {
-    const newNotification = {
-      id: Date.now(),
-      text,
-      time: new Date().toLocaleString(),
-      read: false,
-      type,
-    };
-    setNotifications((prev) => [newNotification, ...prev]);
+  // ── TOAST FUNCTION (auto-dismiss after 5 seconds) ──────────────────────────────
+  const showToast = useCallback((msg, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 5000); // Auto-dismiss after 5 seconds
   }, []);
+
+  // ── NOTIFICATION FUNCTIONS ──────────────────────────────────────────────
+  const addNotification = useCallback(
+    (text, type = "info") => {
+      const newNotification = {
+        id: Date.now(),
+        text,
+        time: new Date().toLocaleString(),
+        read: false,
+        type,
+      };
+      setNotifications((prev) => [newNotification, ...prev]);
+
+      // Also show toast popup
+      showToast(text, type);
+    },
+    [showToast],
+  );
 
   const markRead = useCallback((id) => {
     setNotifications((prev) =>
@@ -67,6 +82,11 @@ export function AppProvider({ children }) {
 
   const markAllRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  }, []);
+
+  // Function to manually close toast
+  const closeToast = useCallback(() => {
+    setToast(null);
   }, []);
 
   useEffect(() => {
@@ -140,7 +160,6 @@ export function AppProvider({ children }) {
     const { data: employeesData } = await supabase.from("employee").select("*");
 
     if (employeesData) {
-      // Get current department for each employee from jobhistory
       const { data: jobHistoryData } = await supabase
         .from("jobhistory")
         .select("empno, deptcode, jobcode")
@@ -155,7 +174,6 @@ export function AppProvider({ children }) {
         });
       }
 
-      // Get department names
       const { data: deptData } = await supabase.from("department").select("*");
       const deptNameMap = new Map();
       if (deptData) {
@@ -224,7 +242,6 @@ export function AppProvider({ children }) {
   async function loadSalesData() {
     const isAdmin = isAdminUser();
 
-    // ─── SALES with joins ───────────────────────────────────
     let salesQuery = supabase.from("sales").select(`
         *,
         customer:customer!sales_custno_fkey (*),
@@ -255,7 +272,6 @@ export function AppProvider({ children }) {
       setSales(normalizedSales);
     }
 
-    // ─── SALES DETAIL with product join ─────────────────────
     let detailQuery = supabase.from("salesdetail").select(`
         *,
         product:product!salesdetail_prodcode_fkey (*)
@@ -269,13 +285,14 @@ export function AppProvider({ children }) {
 
     if (detailData) {
       const normalizedDetails = detailData.map((row) => ({
-        ...row,
+        id: row.id,
         transno: row.transno,
         prodcode: row.prodcode,
-        description: row.product?.description,
-        unit: row.product?.unit,
         quantity: Number(row.quantity) || 0,
         record_status: row.record_status,
+        stamp: row.stamp,
+        description: row.product?.description,
+        unit: row.product?.unit,
       }));
       setSalesDetail(normalizedDetails);
     }
@@ -291,7 +308,6 @@ export function AppProvider({ children }) {
   }
 
   async function loadReportViews() {
-    // ─── MONTHLY SALES TREND ────────────────────────────────
     const { data: monthlyData } = await supabase
       .from("monthly_sales_trend")
       .select("*")
@@ -309,7 +325,6 @@ export function AppProvider({ children }) {
       );
     }
 
-    // ─── SALES BY CUSTOMER ──────────────────────────────────
     const { data: customerSalesData } = await supabase
       .from("sales_by_customer")
       .select("*")
@@ -327,7 +342,6 @@ export function AppProvider({ children }) {
       );
     }
 
-    // ─── TOP PRODUCTS SOLD ──────────────────────────────────
     const { data: topProductsData } = await supabase
       .from("top_products_sold")
       .select("*")
@@ -347,7 +361,6 @@ export function AppProvider({ children }) {
     }
   }
 
-  // ── getCurrentPrice for a product ───────────────────────────────────────
   const getCurrentPrice = useCallback(
     (prodcode) => {
       const priceEntry = priceHist.find((ph) => ph.prodcode === prodcode);
@@ -446,7 +459,9 @@ export function AppProvider({ children }) {
         .from("salesdetail")
         .insert([
           {
-            ...line,
+            transno: line.transno,
+            prodcode: line.prodcode,
+            quantity: line.quantity,
             record_status: "ACTIVE",
             stamp: new Date().toISOString(),
           },
@@ -454,6 +469,12 @@ export function AppProvider({ children }) {
         .select()
         .single();
       if (error) throw error;
+
+      await supabase
+        .from("sales")
+        .update({ stamp: new Date().toISOString() })
+        .eq("transno", line.transno);
+
       await reloadSales();
       addNotification(
         `➕ Product ${line.prodcode} was added to transaction ${line.transno}`,
@@ -468,12 +489,21 @@ export function AppProvider({ children }) {
     async (transno, prodcode, updates) => {
       const { data: upd, error } = await supabase
         .from("salesdetail")
-        .update(updates)
+        .update({
+          quantity: updates.quantity,
+          stamp: new Date().toISOString(),
+        })
         .eq("transno", transno)
         .eq("prodcode", prodcode)
         .select()
         .single();
       if (error) throw error;
+
+      await supabase
+        .from("sales")
+        .update({ stamp: new Date().toISOString() })
+        .eq("transno", transno);
+
       await reloadSales();
       addNotification(
         `📦 Product ${prodcode} quantity was updated in transaction ${transno}`,
@@ -488,10 +518,19 @@ export function AppProvider({ children }) {
     async (transno, prodcode) => {
       const { error } = await supabase
         .from("salesdetail")
-        .update({ record_status: "DELETED" })
+        .update({
+          record_status: "DELETED",
+          stamp: new Date().toISOString(),
+        })
         .eq("transno", transno)
         .eq("prodcode", prodcode);
       if (error) throw error;
+
+      await supabase
+        .from("sales")
+        .update({ stamp: new Date().toISOString() })
+        .eq("transno", transno);
+
       await reloadSales();
       addNotification(
         `❌ Product ${prodcode} was removed from transaction ${transno}`,
@@ -501,7 +540,6 @@ export function AppProvider({ children }) {
     [reloadSales, addNotification],
   );
 
-  // ── Helper to calculate totals from sales and details ───────────────────
   const getSaleTotal = useCallback(
     (transno) => {
       const details = salesDetail.filter((d) => d.transno === transno);
@@ -518,7 +556,6 @@ export function AppProvider({ children }) {
     <AppContext.Provider
       value={{
         loading,
-        // Main data
         sales,
         salesDetail,
         customers,
@@ -531,11 +568,9 @@ export function AppProvider({ children }) {
         payments,
         rights,
         modules,
-        // Report data (from views)
         monthlySalesTrend,
         salesByCustomer,
         topProductsSold,
-        // Methods
         loadSales: reloadSales,
         reloadAll,
         addSale,
@@ -546,14 +581,14 @@ export function AppProvider({ children }) {
         softDeleteDetailLine,
         getCurrentPrice,
         getSaleTotal,
-        // Role helpers
         isAdmin: isAdminUser(),
         isSuperAdmin: isSuperAdmin(),
-        // Notifications
         notifications,
         addNotification,
         markRead,
         markAllRead,
+        toast, // ← Add toast to context
+        closeToast, // ← Add closeToast to context
       }}
     >
       {children}

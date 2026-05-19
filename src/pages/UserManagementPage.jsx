@@ -53,26 +53,28 @@ export default function UserManagementPage() {
 
   const canManageUsers = hasPermission("ADM_USER") || isSuperAdmin();
 
-  const fetchUsers = useCallback(async (quiet = false) => {
-    quiet ? setRefreshing(true) : setLoading(true);
-    const { data, error } = await supabase
-      .from("user")
-      .select("userid, username, user_type, record_status")
-      .order("user_type")
-      .order("username");
-    if (error) showToast("Failed to load users: " + error.message, "error");
-    else setUsers(data || []);
-    quiet ? setRefreshing(false) : setLoading(false);
-  }, []);
+  const fetchUsers = useCallback(
+    async (quiet = false) => {
+      quiet ? setRefreshing(true) : setLoading(true);
+      const { data, error } = await supabase
+        .from("user")
+        .select("userid, username, user_type, record_status")
+        .order("user_type")
+        .order("username");
+      if (error) {
+        // Use addNotification instead of showToast for errors
+        addNotification(`Failed to load users: ${error.message}`, "error");
+      } else {
+        setUsers(data || []);
+      }
+      quiet ? setRefreshing(false) : setLoading(false);
+    },
+    [addNotification],
+  );
 
   useEffect(() => {
     if (canManageUsers) fetchUsers();
   }, [fetchUsers, canManageUsers]);
-
-  function showToast(msg, type = "success") {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
-  }
 
   // Helper function to delete user_module records for a user
   const deleteUserModuleRecords = async (userId) => {
@@ -87,7 +89,7 @@ export default function UserManagementPage() {
     return true;
   };
 
-  /* ── Confirm actions with foreign key handling and notifications ── */
+  /* ── Confirm actions with foreign key handling ── */
   async function handleConfirm() {
     if (!confirm) return;
     const { action, user } = confirm;
@@ -95,31 +97,37 @@ export default function UserManagementPage() {
     try {
       let updateData = {};
       let notificationMessage = "";
+      let successMessage = "";
 
       if (action === "activate") {
         updateData = { record_status: "ACTIVE" };
         notificationMessage = `✅ User ${user.username} was activated`;
+        successMessage = `${user.username} has been activated.`;
       }
 
       if (action === "deactivate") {
         await deleteUserModuleRecords(user.userid);
         updateData = { record_status: "INACTIVE" };
         notificationMessage = `⛔ User ${user.username} was deactivated`;
+        successMessage = `${user.username} has been deactivated and their permissions have been removed.`;
       }
 
       if (action === "promote-admin") {
         updateData = { user_type: "ADMIN" };
         notificationMessage = `👑 User ${user.username} was promoted to Admin`;
+        successMessage = `${user.username} promoted to Admin. They must log out and back in for changes to take effect.`;
       }
 
       if (action === "promote-superadmin") {
         updateData = { user_type: "SUPERADMIN" };
         notificationMessage = `👑 User ${user.username} was promoted to Super Admin`;
+        successMessage = `${user.username} promoted to Super Admin. They must log out and back in for changes to take effect.`;
       }
 
       if (action === "demote-user") {
         updateData = { user_type: "USER" };
         notificationMessage = `⬇️ User ${user.username} was demoted to User`;
+        successMessage = `${user.username} demoted to User. They must log out and back in for changes to take effect.`;
       }
 
       const { error } = await supabase
@@ -136,18 +144,12 @@ export default function UserManagementPage() {
         ),
       );
 
-      addNotification(notificationMessage, "info");
+      // Only ONE notification - addNotification handles both bell icon AND toast popup
+      addNotification(notificationMessage, "success");
 
-      const labels = {
-        activate: `${user.username} has been activated.`,
-        deactivate: `${user.username} has been deactivated and their permissions have been removed.`,
-        "promote-admin": `${user.username} promoted to Admin. They must log out and back in for changes to take effect.`,
-        "promote-superadmin": `${user.username} promoted to Super Admin. They must log out and back in for changes to take effect.`,
-        "demote-user": `${user.username} demoted to User. They must log out and back in for changes to take effect.`,
-      };
-      showToast(labels[action] || "Action completed.", "success");
+      // Removed the duplicate showToast call
     } catch (err) {
-      showToast(err.message || "Action failed.", "error");
+      addNotification(err.message || "Action failed.", "error");
     } finally {
       setActionLoading(false);
       setConfirm(null);
@@ -232,13 +234,8 @@ export default function UserManagementPage() {
 
   return (
     <div className="fade-in">
-      {toast && (
-        <Toast
-          msg={toast.msg}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+      {/* Toast is now handled by Topbar, so remove it from here to avoid duplicates */}
+      {/* Removed the standalone Toast component since it's already in Topbar */}
 
       {/* Summary */}
       <div className="um-summary">

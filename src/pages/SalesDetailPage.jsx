@@ -19,7 +19,7 @@ import "./SalesDetailPage.css";
 export default function SalesDetailPage() {
   const { transNo } = useParams();
   const navigate = useNavigate();
-  const { getCurrentPrice, products, loadSales } = useApp();
+  const { getCurrentPrice, products, loadSales, updateDetailLine } = useApp();
   const { canAdd, canEdit, canDelete, isSuperAdmin } = usePermissions();
   const { currentUser } = useAuth();
 
@@ -29,22 +29,18 @@ export default function SalesDetailPage() {
   const [error, setError] = useState(null);
   const [priceMap, setPriceMap] = useState(new Map());
 
-  // Modal states
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
-  // Add product form state
   const [selectedProduct, setSelectedProduct] = useState("");
   const [productQuantity, setProductQuantity] = useState(1);
   const [addLoading, setAddLoading] = useState(false);
   const [editQuantity, setEditQuantity] = useState(1);
   const [editLoading, setEditLoading] = useState(false);
 
-  // Check if user can see Last Modified (Superadmin or Admin)
   const userType = currentUser?.user_type;
   const showLastModified = userType === "SUPERADMIN" || userType === "ADMIN";
 
-  // Load price map once for performance
   useEffect(() => {
     const loadPrices = async () => {
       const { data: prices } = await supabase
@@ -63,10 +59,8 @@ export default function SalesDetailPage() {
     loadPrices();
   }, []);
 
-  // Optimized single query to load all data
   const loadSaleDetailsData = useCallback(async () => {
     try {
-      // Single query with all joins - includes stamp from salesdetail
       const { data: saleData, error: saleError } = await supabase
         .from("sales")
         .select(
@@ -78,19 +72,10 @@ export default function SalesDetailPage() {
           record_status,
           stamp,
           customer:custno (custno, custname, address, payterm),
-          employee:empno (empno, firstname, lastname),
-          salesdetail!inner (
-            transno,
-            prodcode,
-            quantity,
-            record_status,
-            stamp,
-            product:prodcode (prodcode, description, unit)
-          )
+          employee:empno (empno, firstname, lastname)
         `,
         )
         .eq("transno", transNo)
-        .eq("salesdetail.record_status", "ACTIVE")
         .single();
 
       if (saleError) throw saleError;
@@ -100,7 +85,23 @@ export default function SalesDetailPage() {
         return;
       }
 
-      // Process sale header
+      const { data: detailsData, error: detailsError } = await supabase
+        .from("salesdetail")
+        .select(
+          `
+          transno,
+          prodcode,
+          quantity,
+          record_status,
+          stamp,
+          product:prodcode (prodcode, description, unit)
+        `,
+        )
+        .eq("transno", transNo)
+        .eq("record_status", "ACTIVE");
+
+      if (detailsError) throw detailsError;
+
       setSale({
         transno: saleData.transno,
         salesdate: saleData.salesdate,
@@ -116,9 +117,7 @@ export default function SalesDetailPage() {
         stamp: saleData.stamp,
       });
 
-      // Process line items with prices and stamps
-      const details = saleData.salesdetail || [];
-      const itemsWithPrices = details.map((item, index) => {
+      const itemsWithPrices = (detailsData || []).map((item, index) => {
         const unitPrice = priceMap.get(item.prodcode) || 0;
         const quantity = Number(item.quantity) || 0;
         const total = quantity * unitPrice;
@@ -126,6 +125,7 @@ export default function SalesDetailPage() {
 
         return {
           key: `${item.transno}-${item.prodcode}-${index}`,
+          id: item.id,
           prodcode: item.prodcode,
           description: product.description || item.prodcode,
           unit: product.unit || "pc",
@@ -146,17 +146,11 @@ export default function SalesDetailPage() {
   }, [transNo, priceMap]);
 
   useEffect(() => {
-    if (transNo && priceMap.size > 0) {
+    if (transNo) {
       loadSaleDetailsData();
-    } else if (transNo && priceMap.size === 0) {
-      const timer = setTimeout(() => {
-        if (priceMap.size > 0) loadSaleDetailsData();
-      }, 100);
-      return () => clearTimeout(timer);
     }
-  }, [transNo, priceMap, loadSaleDetailsData]);
+  }, [transNo, loadSaleDetailsData]);
 
-  // Add product to transaction
   const handleAddProduct = async () => {
     if (!selectedProduct) {
       setError("Please select a product");
@@ -186,6 +180,11 @@ export default function SalesDetailPage() {
 
       if (insertError) throw insertError;
 
+      await supabase
+        .from("sales")
+        .update({ stamp: new Date().toISOString() })
+        .eq("transno", transNo);
+
       await loadSaleDetailsData();
       await loadSales();
       setShowAddProductModal(false);
@@ -198,7 +197,6 @@ export default function SalesDetailPage() {
     }
   };
 
-  // Edit line item quantity
   const handleEditItem = async () => {
     if (!editingItem) return;
 
@@ -206,28 +204,21 @@ export default function SalesDetailPage() {
     setError("");
 
     try {
-      const { error: updateError } = await supabase
-        .from("salesdetail")
-        .update({
-          quantity: editQuantity,
-          stamp: new Date().toISOString(),
-        })
-        .eq("transno", transNo)
-        .eq("prodcode", editingItem.prodcode);
-
-      if (updateError) throw updateError;
+      await updateDetailLine(transNo, editingItem.prodcode, {
+        quantity: editQuantity,
+      });
 
       await loadSaleDetailsData();
       await loadSales();
       setEditingItem(null);
     } catch (err) {
+      console.error("Edit error:", err);
       setError(err.message || "Failed to update quantity");
     } finally {
       setEditLoading(false);
     }
   };
 
-  // Delete line item
   const handleDeleteItem = async (prodcode) => {
     if (!window.confirm(`Remove product ${prodcode} from this transaction?`))
       return;
@@ -243,6 +234,11 @@ export default function SalesDetailPage() {
         .eq("prodcode", prodcode);
 
       if (deleteError) throw deleteError;
+
+      await supabase
+        .from("sales")
+        .update({ stamp: new Date().toISOString() })
+        .eq("transno", transNo);
 
       await loadSaleDetailsData();
       await loadSales();
@@ -308,7 +304,6 @@ export default function SalesDetailPage() {
         </button>
       </div>
 
-      {/* Sale Information Card */}
       <div className="detail-card">
         <h2>Sale Detail</h2>
         <div className="detail-grid">
@@ -339,7 +334,6 @@ export default function SalesDetailPage() {
         </div>
       </div>
 
-      {/* Customer & Employee Info */}
       <div className="detail-card">
         <h3>Customer Information</h3>
         <div className="detail-grid">
@@ -374,7 +368,6 @@ export default function SalesDetailPage() {
         </div>
       </div>
 
-      {/* Line Items Table */}
       <div className="detail-card">
         <div
           style={{
